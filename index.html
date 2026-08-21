@@ -337,7 +337,8 @@ canvas{display:none}
       <div class="rotate-icon">↻</div>
       <div class="rotate-title">Gunakan Mode Landscape</div>
       <div class="rotate-copy">
-        CMM GeoCam dirancang untuk dokumentasi 16:9.
+        CMM GeoCam menggunakan format dokumentasi 16:9.
+        Foto dan video hanya dapat dibuat dalam mode landscape.
         Aktifkan auto-rotate lalu putar smartphone ke posisi landscape.
       </div>
     </div>
@@ -421,6 +422,7 @@ canvas{display:none}
 
   <canvas id="captureCanvas"></canvas>
   <canvas id="videoCanvas"></canvas>
+  <canvas id="videoOverlayCanvas"></canvas>
   <div class="toast" id="toast"></div>
 </div>
 
@@ -449,6 +451,24 @@ let recordingAnimation = null;
 let recordingTimer = null;
 let recordingStartedAt = 0;
 
+/*
+   Prototype 6 Corrected video profile.
+   Camera request: 1280x720
+   Output: 1280x720
+   Frame push: manual when supported
+*/
+const VIDEO_WIDTH = 1280;
+const VIDEO_HEIGHT = 720;
+const VIDEO_TARGET_FPS = 30;
+const VIDEO_BITRATE = 4000000;
+
+let videoCanvasTrack = null;
+let videoUsesManualFrames = false;
+let videoFrameCallbackId = null;
+let videoFallbackTimer = null;
+let lastFrameTime = 0;
+let overlayDirty = true;
+
 const state = {
   staText:"--+---",
   segment:"Menunggu Database Alignment",
@@ -463,9 +483,82 @@ const state = {
 
 const $ = id => document.getElementById(id);
 
+/* Canvas-specific logo object for reliable burn-in */
+const watermarkLogo = new Image();
+watermarkLogo.decoding = "async";
+watermarkLogo.src = "./logo-mms.png";
+let watermarkLogoReady = false;
+
+const watermarkLogoPromise = new Promise(resolve => {
+  const finish = () => {
+    watermarkLogoReady =
+      watermarkLogo.complete &&
+      watermarkLogo.naturalWidth > 0;
+    resolve(watermarkLogoReady);
+  };
+
+  watermarkLogo.onload = finish;
+  watermarkLogo.onerror = () => {
+    watermarkLogoReady = false;
+    resolve(false);
+  };
+
+  if(
+    watermarkLogo.complete &&
+    watermarkLogo.naturalWidth > 0
+  ){
+    finish();
+  }
+});
+
+async function ensureWatermarkLogo(){
+  if(
+    watermarkLogo.complete &&
+    watermarkLogo.naturalWidth > 0
+  ){
+    watermarkLogoReady = true;
+    return true;
+  }
+
+  try{
+    await watermarkLogoPromise;
+    if(
+      watermarkLogo.decode &&
+      watermarkLogo.naturalWidth > 0
+    ){
+      try{
+        await watermarkLogo.decode();
+      }catch(e){}
+    }
+  }catch(e){}
+
+  watermarkLogoReady =
+    watermarkLogo.naturalWidth > 0;
+
+  return watermarkLogoReady;
+}
+
 /* =========================================================
    UI HELPERS
 ========================================================= */
+function isLandscapeMode(){
+  return window.matchMedia(
+    "(orientation: landscape)"
+  ).matches;
+}
+
+function requireLandscape(){
+  if(isLandscapeMode()){
+    return true;
+  }
+
+  toast(
+    "Putar perangkat ke mode landscape untuk melakukan dokumentasi."
+  );
+
+  return false;
+}
+
 function toast(msg){
   const t=$("toast");
   t.textContent=msg;
@@ -482,6 +575,23 @@ function formatSTA(v){
     m-=1000;
   }
   return km+"+"+String(m).padStart(3,"0");
+}
+
+function filenameTimestamp(){
+  const d=new Date();
+  const yyyy=d.getFullYear();
+  const mm=String(d.getMonth()+1).padStart(2,"0");
+  const dd=String(d.getDate()).padStart(2,"0");
+  const hh=String(d.getHours()).padStart(2,"0");
+  const mi=String(d.getMinutes()).padStart(2,"0");
+  const ss=String(d.getSeconds()).padStart(2,"0");
+  return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+}
+
+function safeSTAForFilename(){
+  return state.staText
+    .replace("+","-")
+    .replace(/[^0-9A-Za-z_-]/g,"");
 }
 
 function distance(lat1,lon1,lat2,lon2){
@@ -845,6 +955,11 @@ function render(){
 
   label.textContent=
     state.status;
+
+  /*
+    Rebuild overlay only when GPS/STA/UI data changes.
+  */
+  overlayDirty = true;
 }
 
 /* =========================================================
@@ -917,10 +1032,10 @@ async function startCamera(){
             ideal:"environment"
           },
           width:{
-            ideal:1920
+            ideal:1280
           },
           height:{
-            ideal:1080
+            ideal:720
           }
         },
         audio:false
@@ -1103,31 +1218,38 @@ function drawWatermarks(
      LOGO MMS KIRI ATAS
      Logo ikut tertanam pada hasil foto/video.
   ------------------------- */
-  const logo=
-    $("mmsLogo");
-
   if(
-    logo &&
-    logo.complete &&
-    logo.naturalWidth>0
+    watermarkLogoReady &&
+    watermarkLogo.naturalWidth>0
   ){
     const logoW=
-      Math.round(width*0.17);
+      Math.round(width*0.18);
 
     const logoH=
       Math.round(
         logoW *
-        logo.naturalHeight /
-        logo.naturalWidth
+        watermarkLogo.naturalHeight /
+        watermarkLogo.naturalWidth
       );
 
+    /*
+      Shadow is rendered only when overlay cache is rebuilt,
+      not on every camera frame.
+    */
+    ctx.save();
+    ctx.shadowColor="rgba(0,0,0,.35)";
+    ctx.shadowBlur=Math.round(height*0.010);
+    ctx.shadowOffsetY=Math.round(height*0.003);
+
     ctx.drawImage(
-      logo,
+      watermarkLogo,
       pad,
       pad,
       logoW,
       logoH
     );
+
+    ctx.restore();
   }
 
   /* -------------------------
@@ -1319,9 +1441,172 @@ function drawWatermarks(
 }
 
 /* =========================================================
+   VIDEO COMPOSITING PIPELINE
+
+   Per frame:
+   1. draw current camera frame
+   2. draw cached transparent overlay
+   3. requestFrame() only after canvas is ready
+
+   Overlay is rebuilt only when GPS/STA values change.
+========================================================= */
+function rebuildVideoOverlay(){
+  if(!overlayDirty){
+    return;
+  }
+
+  const overlay=$("videoOverlayCanvas");
+
+  if(
+    overlay.width!==VIDEO_WIDTH ||
+    overlay.height!==VIDEO_HEIGHT
+  ){
+    overlay.width=VIDEO_WIDTH;
+    overlay.height=VIDEO_HEIGHT;
+  }
+
+  const ctx=overlay.getContext(
+    "2d",
+    {alpha:true}
+  );
+
+  ctx.clearRect(
+    0,
+    0,
+    overlay.width,
+    overlay.height
+  );
+
+  drawWatermarks(
+    ctx,
+    overlay.width,
+    overlay.height
+  );
+
+  overlayDirty=false;
+}
+
+function compositeVideoFrame(){
+  const canvas=$("videoCanvas");
+  const ctx=canvas.getContext(
+    "2d",
+    {alpha:false}
+  );
+
+  drawCameraFrame(
+    ctx,
+    canvas
+  );
+
+  rebuildVideoOverlay();
+
+  ctx.drawImage(
+    $("videoOverlayCanvas"),
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  /*
+    Manual mode: only push a frame AFTER compositing is complete.
+    Avoids captureStream(30) sampling duplicate/stale canvas frames.
+  */
+  if(
+    videoUsesManualFrames &&
+    videoCanvasTrack &&
+    typeof videoCanvasTrack.requestFrame==="function"
+  ){
+    try{
+      videoCanvasTrack.requestFrame();
+    }catch(e){}
+  }
+}
+
+function scheduleVideoFrames(){
+  if(!isRecording()){
+    return;
+  }
+
+  const video=$("preview");
+
+  if(
+    typeof video.requestVideoFrameCallback==="function"
+  ){
+    videoFrameCallbackId=
+      video.requestVideoFrameCallback(
+        (now)=>{
+          if(!isRecording()){
+            return;
+          }
+
+          /*
+            Cap work to ~30 fps if camera provides higher frame rate.
+          */
+          const minInterval=
+            1000/VIDEO_TARGET_FPS;
+
+          if(
+            now-lastFrameTime >= minInterval
+          ){
+            compositeVideoFrame();
+            lastFrameTime=now;
+          }
+
+          scheduleVideoFrames();
+        }
+      );
+  }else{
+    videoFallbackTimer=
+      setTimeout(
+        ()=>{
+          if(!isRecording()){
+            return;
+          }
+
+          compositeVideoFrame();
+          scheduleVideoFrames();
+        },
+        Math.round(1000/VIDEO_TARGET_FPS)
+      );
+  }
+}
+
+function stopVideoFrameLoop(){
+  const video=$("preview");
+
+  if(
+    videoFrameCallbackId!==null &&
+    typeof video.cancelVideoFrameCallback==="function"
+  ){
+    try{
+      video.cancelVideoFrameCallback(
+        videoFrameCallbackId
+      );
+    }catch(e){}
+  }
+
+  videoFrameCallbackId=null;
+
+  if(videoFallbackTimer!==null){
+    clearTimeout(videoFallbackTimer);
+  }
+
+  videoFallbackTimer=null;
+}
+
+/* =========================================================
    PHOTO
 ========================================================= */
 function canStartCapture(){
+  /*
+    Strict Landscape:
+    Foto dan video hanya dapat dibuat ketika perangkat benar-benar landscape.
+  */
+  if(!requireLandscape()){
+    return false;
+  }
+
   if(!mediaStream){
     toast(
       "Aktifkan kamera terlebih dahulu."
@@ -1339,8 +1624,16 @@ function canStartCapture(){
   return true;
 }
 
-function capturePhoto(){
+async function capturePhoto(){
   if(!canStartCapture()){
+    return;
+  }
+
+  const logoOK=
+    await ensureWatermarkLogo();
+
+  if(!logoOK){
+    toast("Logo MMS belum siap. Coba lagi.");
     return;
   }
 
@@ -1380,7 +1673,7 @@ function capturePhoto(){
         url;
 
       a.download=
-        `CMMGeoCam_STA_${state.staText.replace("+","-")}_${Date.now()}.jpg`;
+        `CMMGeoCam_STA_${safeSTAForFilename()}_${filenameTimestamp()}.jpg`;
 
       a.click();
 
@@ -1403,55 +1696,61 @@ function capturePhoto(){
    Video dibuat dari canvas sehingga watermark
    benar-benar tertanam dan berubah dinamis selama mobil bergerak.
 ========================================================= */
-function supportedVideoMime(){
-  if(
-    !window.MediaRecorder
-  ){
-    return "";
+function preferredVideoFormat(){
+  if(!window.MediaRecorder){
+    return {
+      mime:"",
+      extension:"webm",
+      label:"Browser default"
+    };
   }
 
-  const types=[
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm"
+  const candidates=[
+    {
+      mime:'video/mp4;codecs="avc1.42E01E"',
+      extension:"mp4",
+      label:"MP4 / H.264"
+    },
+    {
+      mime:'video/mp4;codecs="avc1"',
+      extension:"mp4",
+      label:"MP4 / H.264"
+    },
+    {
+      mime:"video/mp4",
+      extension:"mp4",
+      label:"MP4"
+    },
+    {
+      mime:"video/webm;codecs=vp9",
+      extension:"webm",
+      label:"WEBM / VP9"
+    },
+    {
+      mime:"video/webm;codecs=vp8",
+      extension:"webm",
+      label:"WEBM / VP8"
+    },
+    {
+      mime:"video/webm",
+      extension:"webm",
+      label:"WEBM"
+    }
   ];
 
   return (
-    types.find(
-      type=>
-        MediaRecorder.isTypeSupported(type)
+    candidates.find(
+      item=>
+        MediaRecorder.isTypeSupported(item.mime)
     ) ||
-    ""
+    {
+      mime:"",
+      extension:"webm",
+      label:"Browser default"
+    }
   );
 }
 
-function drawRecordingFrame(){
-  if(!isRecording()){
-    return;
-  }
-
-  const c=
-    $("videoCanvas");
-
-  const ctx=
-    c.getContext("2d");
-
-  drawCameraFrame(
-    ctx,
-    c
-  );
-
-  drawWatermarks(
-    ctx,
-    c.width,
-    c.height
-  );
-
-  recordingAnimation=
-    requestAnimationFrame(
-      drawRecordingFrame
-    );
-}
 
 function updateRecordingTimer(){
   const elapsed=
@@ -1476,8 +1775,16 @@ function updateRecordingTimer(){
     String(second).padStart(2,"0");
 }
 
-function startVideoRecording(){
+async function startVideoRecording(){
   if(!canStartCapture()){
+    return;
+  }
+
+  const logoOK=
+    await ensureWatermarkLogo();
+
+  if(!logoOK){
+    toast("Logo MMS belum siap. Coba mulai video lagi.");
     return;
   }
 
@@ -1491,50 +1798,53 @@ function startVideoRecording(){
     return;
   }
 
-  const c=
-    $("videoCanvas");
+  const canvas=$("videoCanvas");
+  canvas.width=VIDEO_WIDTH;
+  canvas.height=VIDEO_HEIGHT;
+
+  overlayDirty=true;
+  rebuildVideoOverlay();
+  compositeVideoFrame();
 
   /*
-    MVP video 1280x720.
-    Lebih ringan daripada 1920x1080 untuk smartphone.
+    Prefer manual canvas frames.
+    If requestFrame() isn't available, fall back to fixed 30 fps.
   */
-  c.width=1280;
-  c.height=720;
+  let canvasStream=canvas.captureStream(0);
+  videoCanvasTrack=canvasStream.getVideoTracks()[0] || null;
 
-  const ctx=
-    c.getContext("2d");
+  videoUsesManualFrames=
+    !!(
+      videoCanvasTrack &&
+      typeof videoCanvasTrack.requestFrame==="function"
+    );
 
-  /*
-    Gambar frame pertama sebelum captureStream dimulai.
-  */
-  drawCameraFrame(
-    ctx,
-    c
-  );
+  if(!videoUsesManualFrames){
+    canvasStream.getTracks().forEach(
+      track=>track.stop()
+    );
 
-  drawWatermarks(
-    ctx,
-    c.width,
-    c.height
-  );
+    canvasStream=
+      canvas.captureStream(VIDEO_TARGET_FPS);
 
-  const canvasStream=
-    c.captureStream(30);
+    videoCanvasTrack=
+      canvasStream.getVideoTracks()[0] || null;
+  }
 
-  const mime=
-    supportedVideoMime();
+  const videoFormat=
+    preferredVideoFormat();
 
   try{
     mediaRecorder=
       new MediaRecorder(
         canvasStream,
-        mime
+        videoFormat.mime
           ? {
-              mimeType:mime,
-              videoBitsPerSecond:4000000
+              mimeType:videoFormat.mime,
+              videoBitsPerSecond:VIDEO_BITRATE
             }
           : {
-              videoBitsPerSecond:4000000
+              videoBitsPerSecond:VIDEO_BITRATE
             }
       );
   }catch(e){
@@ -1560,20 +1870,27 @@ function startVideoRecording(){
 
   mediaRecorder.onstop=
     ()=>{
-      if(recordingAnimation){
-        cancelAnimationFrame(
-          recordingAnimation
-        );
-      }
+      stopVideoFrameLoop();
+
+      const actualMime=
+        mediaRecorder.mimeType ||
+        videoFormat.mime ||
+        "video/webm";
+
+      const isMp4=
+        actualMime
+          .toLowerCase()
+          .includes("mp4");
+
+      const extension=
+        isMp4
+          ? "mp4"
+          : "webm";
 
       const blob=
         new Blob(
           recordedChunks,
-          {
-            type:
-              mediaRecorder.mimeType ||
-              "video/webm"
-          }
+          {type:actualMime}
         );
 
       const url=
@@ -1582,12 +1899,15 @@ function startVideoRecording(){
       const a=
         document.createElement("a");
 
-      a.href=
-        url;
+      a.href=url;
 
       a.download=
-        `CMMGeoCam_VIDEO_STA_${state.staText.replace("+","-")}_${Date.now()}.webm`;
+        `CMMGeoCam_VIDEO_STA_${safeSTAForFilename()}_${filenameTimestamp()}.${extension}`;
 
+      /*
+        Local-only download.
+        No upload/cloud endpoint is used.
+      */
       a.click();
 
       setTimeout(
@@ -1595,15 +1915,36 @@ function startVideoRecording(){
         5000
       );
 
+      if(
+        canvasStream &&
+        canvasStream.getTracks
+      ){
+        canvasStream
+          .getTracks()
+          .forEach(
+            track=>track.stop()
+          );
+      }
+
+      videoCanvasTrack=null;
+      videoUsesManualFrames=false;
+
       toast(
-        "Video tersimpan dengan watermark dinamis."
+        isMp4
+          ? "Video MP4 tersimpan di perangkat."
+          : "Video disimpan sebagai WEBM."
       );
     };
 
-  mediaRecorder.start(500);
+  /*
+    1 second chunks: lower JS event overhead.
+  */
+  mediaRecorder.start(1000);
 
   recordingStartedAt=
     Date.now();
+
+  lastFrameTime=0;
 
   $("recBadge").classList.add(
     "show"
@@ -1626,13 +1967,25 @@ function startVideoRecording(){
       500
     );
 
-  drawRecordingFrame();
+  /*
+    Push initial fully-composited frame,
+    then sync to incoming camera frames.
+  */
+  compositeVideoFrame();
+  scheduleVideoFrames();
 
   toast(
-    "Perekaman video dimulai."
+    "Video 720p · " +
+    (
+      videoUsesManualFrames
+        ? "manual frame sync"
+        : "30 fps fallback"
+    ) +
+    " · " +
+    videoFormat.label +
+    " · Logo MMS aktif"
   );
 }
-
 function stopVideoRecording(){
   if(!isRecording()){
     return;
@@ -1644,11 +1997,7 @@ function stopVideoRecording(){
     recordingTimer
   );
 
-  if(recordingAnimation){
-    cancelAnimationFrame(
-      recordingAnimation
-    );
-  }
+  stopVideoFrameLoop();
 
   $("recBadge").classList.remove(
     "show"
@@ -1698,6 +2047,52 @@ $("shutter").addEventListener(
     }else{
       startVideoRecording();
     }
+  }
+);
+
+/* =========================================================
+   STRICT ORIENTATION WATCH
+
+   Jika perangkat diputar ke portrait saat video sedang direkam:
+   - recording dihentikan otomatis
+   - file yang sudah direkam sampai saat itu tetap disimpan
+   - user harus kembali ke landscape untuk recording berikutnya
+========================================================= */
+function handleOrientationChange(){
+  if(isLandscapeMode()){
+    return;
+  }
+
+  if(isRecording()){
+    stopVideoRecording();
+
+    /*
+      stopVideoRecording() memicu proses finalisasi file MediaRecorder.
+    */
+    setTimeout(
+      ()=>{
+        toast(
+          "Rekaman dihentikan karena perangkat berubah ke portrait."
+        );
+      },
+      100
+    );
+  }
+}
+
+window.addEventListener(
+  "orientationchange",
+  handleOrientationChange
+);
+
+window.addEventListener(
+  "resize",
+  ()=>{
+    /*
+      resize digunakan sebagai fallback pada browser yang tidak
+      mengirim orientationchange secara konsisten.
+    */
+    handleOrientationChange();
   }
 );
 
