@@ -82,7 +82,7 @@ video{
   align-items:center;
   gap:4px;
   flex:0 0 auto;
-  font-size:9px;
+  font-size:10px;
   line-height:1.15
 }
 .tech-row:not(:last-child)::after{
@@ -492,7 +492,6 @@ let videoCanvasTrack = null;
 let videoUsesManualFrames = false;
 let videoFrameCallbackId = null;
 let videoFallbackTimer = null;
-let lastFrameTime = 0;
 let overlayDirty = true;
 
 let actualCameraFrameRate = null;
@@ -1449,10 +1448,10 @@ function drawWatermarks(
       : "-- m";
 
   const techFont=
-    Math.round(height*0.0145);
+    Math.round(height*0.018);
 
   const labelFont=
-    Math.round(height*0.0135);
+    Math.round(height*0.016);
 
   const gap=
     Math.round(width*0.010);
@@ -1504,7 +1503,7 @@ function drawWatermarks(
     );
 
   const bottomH=
-    Math.round(height*0.050);
+    Math.round(height*0.055);
 
   const bottomX=
     pad;
@@ -1527,7 +1526,7 @@ function drawWatermarks(
 
   const textY=
     bottomY+
-    Math.round(height*0.0155);
+    Math.round(height*0.0165);
 
   items.forEach((item,index)=>{
     drawText(
