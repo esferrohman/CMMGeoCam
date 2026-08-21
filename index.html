@@ -76,8 +76,21 @@ video{
 .status-bad{color:var(--red)}
 
 .topbar{
-  position:absolute;left:14px;top:14px;
-  display:flex;gap:8px;align-items:center
+  position:absolute;
+  left:14px;
+  top:14px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  z-index:3
+}
+.mms-logo{
+  display:block;
+  width:150px;
+  max-width:32vw;
+  height:auto;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.32))
 }
 .pill{
   padding:8px 10px;
@@ -232,7 +245,11 @@ canvas{display:none}
   .segment{font-size:11px}
 
   .topbar{left:18px;top:18px}
-  .rec-badge{left:18px;top:60px}
+  .mms-logo{
+    width:176px;
+    max-width:28vw
+  }
+  .rec-badge{left:18px;top:106px}
 
   .tech-info{
     left:18px;
@@ -260,6 +277,43 @@ canvas{display:none}
   .toast{bottom:104px}
 }
 
+/*
+   Prototype ini memang dirancang sebagai camera app landscape.
+   Jika browser gagal melakukan orientation lock, UI portrait
+   ditutup dengan petunjuk agar user memutar perangkat.
+*/
+.rotate-prompt{
+  display:none;
+  position:absolute;
+  inset:0;
+  z-index:30;
+  background:rgba(0,0,0,.94);
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:34px;
+}
+.rotate-card{
+  max-width:360px;
+}
+.rotate-icon{
+  font-size:50px;
+  margin-bottom:14px;
+}
+.rotate-title{
+  font-size:20px;
+  font-weight:900;
+}
+.rotate-copy{
+  margin-top:8px;
+  font-size:12px;
+  line-height:1.5;
+  color:#c4c9ce;
+}
+@media (orientation:portrait){
+  .rotate-prompt{display:flex}
+}
+
 /* ruang aman untuk layar yang sangat kecil */
 @media (max-width:480px) and (orientation:portrait){
   .top-info{max-width:48vw}
@@ -278,7 +332,23 @@ canvas{display:none}
 <div class="app">
   <video id="preview" playsinline muted></video>
 
+  <div class="rotate-prompt" id="rotatePrompt">
+    <div class="rotate-card">
+      <div class="rotate-icon">↻</div>
+      <div class="rotate-title">Gunakan Mode Landscape</div>
+      <div class="rotate-copy">
+        CMM GeoCam dirancang untuk dokumentasi 16:9.
+        Aktifkan auto-rotate lalu putar smartphone ke posisi landscape.
+      </div>
+    </div>
+  </div>
+
   <div class="topbar">
+    <img
+      id="mmsLogo"
+      class="mms-logo"
+      src="./logo-mms.png"
+      alt="ASTRA Infra Toll Road Tangerang-Merak">
     <div class="pill">
       <span id="gpsDot" class="dot"></span>
       <span id="gpsLabel">GPS WAIT</span>
@@ -778,9 +848,67 @@ function render(){
 }
 
 /* =========================================================
+   LANDSCAPE MODE
+   - PWA installed: manifest mengunci landscape-primary.
+   - Browser biasa: mencoba fullscreen + Screen Orientation API.
+   - Jika browser menolak, CSS menampilkan petunjuk putar perangkat.
+========================================================= */
+async function tryForceLandscape(){
+  try{
+    const standalone=
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+
+    /*
+      Di browser biasa, fullscreen meningkatkan kemungkinan
+      orientation.lock() diizinkan oleh Android/Chromium.
+    */
+    if(
+      !standalone &&
+      document.documentElement.requestFullscreen &&
+      !document.fullscreenElement
+    ){
+      try{
+        await document.documentElement.requestFullscreen({
+          navigationUI:"hide"
+        });
+      }catch(e){
+        /*
+          Tidak fatal. User masih bisa memutar HP manual.
+        */
+      }
+    }
+
+    if(
+      screen.orientation &&
+      screen.orientation.lock
+    ){
+      try{
+        await screen.orientation.lock("landscape");
+      }catch(e){
+        /*
+          Beberapa browser hanya mengizinkan lock pada
+          installed PWA atau fullscreen.
+        */
+      }
+    }
+  }catch(e){
+    /*
+      Fallback ditangani oleh rotate prompt.
+    */
+  }
+}
+
+/* =========================================================
    CAMERA
 ========================================================= */
 async function startCamera(){
+  /*
+    Harus dipanggil langsung dari tap user agar browser
+    punya peluang mengizinkan fullscreen/orientation lock.
+  */
+  await tryForceLandscape();
+
   try{
     mediaStream=
       await navigator.mediaDevices.getUserMedia({
@@ -970,6 +1098,37 @@ function drawWatermarks(
 ){
   const pad=
     Math.round(width*0.018);
+
+  /* -------------------------
+     LOGO MMS KIRI ATAS
+     Logo ikut tertanam pada hasil foto/video.
+  ------------------------- */
+  const logo=
+    $("mmsLogo");
+
+  if(
+    logo &&
+    logo.complete &&
+    logo.naturalWidth>0
+  ){
+    const logoW=
+      Math.round(width*0.17);
+
+    const logoH=
+      Math.round(
+        logoW *
+        logo.naturalHeight /
+        logo.naturalWidth
+      );
+
+    ctx.drawImage(
+      logo,
+      pad,
+      pad,
+      logoW,
+      logoH
+    );
+  }
 
   /* -------------------------
      KANAN ATAS

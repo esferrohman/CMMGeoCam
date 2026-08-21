@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v2";
+const CACHE_NAME = "cmm-geocam-v4";
 
 const APP_SHELL = [
   "./",
@@ -6,7 +6,8 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./STA_Tamer.csv",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./logo-mms.png"
 ];
 
 self.addEventListener("install", event => {
