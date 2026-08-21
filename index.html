@@ -8,7 +8,7 @@
 <title>CMM GeoCam</title>
 <style>
 :root{
-  --bg:#090b0d; --panel:rgba(10,12,14,.72); --line:rgba(255,255,255,.20);
+  --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
   --text:#fff; --muted:#c4c9ce; --accent:#f5a623;
   --green:#34c77b; --yellow:#f6bf3c; --red:#ff5f5f;
 }
@@ -29,8 +29,10 @@ video{
 ========================================================= */
 .top-info{
   position:absolute;right:14px;top:14px;
-  max-width:min(52vw,440px);
-  padding:11px 13px;
+  width:max-content;
+  min-width:140px;
+  max-width:min(31vw,270px);
+  padding:7px 9px;
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:12px;
@@ -42,32 +44,51 @@ video{
   font-weight:700;letter-spacing:.10em
 }
 .sta-value{
-  font-size:34px;line-height:1;
-  font-weight:900;margin-top:3px
+  font-size:32px;line-height:1;
+  font-weight:900;margin-top:2px;
+  white-space:nowrap
 }
 .top-row{
-  font-size:12px;font-weight:700;margin-top:7px
+  font-size:11px;font-weight:700;margin-top:5px
 }
 .segment{
-  font-size:11px;line-height:1.25;
-  color:#eef1f4;margin-top:4px
+  font-size:9px;line-height:1.15;
+  color:#eef1f4;margin-top:3px;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
 }
 
 .tech-info{
-  position:absolute;left:14px;bottom:126px;
-  max-width:min(68vw,480px);
-  padding:10px 12px;
+  position:absolute;
+  left:14px;
+  bottom:126px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:max-content;
+  max-width:calc(100vw - 28px);
+  padding:8px 10px;
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:12px;
-  backdrop-filter:blur(7px)
+  backdrop-filter:blur(7px);
+  overflow:hidden;
+  white-space:nowrap
 }
 .tech-row{
-  display:grid;
-  grid-template-columns:116px 1fr;
-  gap:8px;
-  font-size:11px;
-  line-height:1.45
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex:0 0 auto;
+  font-size:9px;
+  line-height:1.15
+}
+.tech-row:not(:last-child)::after{
+  content:"•";
+  margin-left:8px;
+  color:rgba(255,255,255,.35)
 }
 .tech-row .k{color:var(--muted)}
 .tech-row .v{font-weight:750}
@@ -238,10 +259,12 @@ canvas{display:none}
 @media (orientation: landscape){
   .top-info{
     right:18px;top:18px;
-    max-width:min(38vw,520px);
-    padding:10px 13px
+    width:max-content;
+    min-width:145px;
+    max-width:min(27vw,250px);
+    padding:7px 9px
   }
-  .sta-value{font-size:40px}
+  .sta-value{font-size:36px}
   .segment{font-size:11px}
 
   .topbar{left:18px;top:18px}
@@ -254,8 +277,9 @@ canvas{display:none}
   .tech-info{
     left:18px;
     bottom:18px;
-    max-width:min(42vw,560px);
-    padding:9px 12px
+    width:max-content;
+    max-width:calc(100vw - 36px);
+    padding:8px 10px
   }
 
   .bottom{
@@ -319,10 +343,12 @@ canvas{display:none}
   .top-info{max-width:48vw}
   .sta-value{font-size:30px}
   .segment{font-size:10px}
-  .tech-info{max-width:72vw}
+  .tech-info{
+    max-width:calc(100vw - 28px);
+    overflow-x:auto
+  }
   .tech-row{
-    grid-template-columns:106px 1fr;
-    font-size:10px
+    font-size:9px
   }
 }
 </style>
@@ -468,6 +494,8 @@ let videoFrameCallbackId = null;
 let videoFallbackTimer = null;
 let lastFrameTime = 0;
 let overlayDirty = true;
+
+let actualCameraFrameRate = null;
 
 const state = {
   staText:"--+---",
@@ -1036,6 +1064,15 @@ async function startCamera(){
           },
           height:{
             ideal:720
+          },
+          /*
+            Request 30 fps, but do not set a hard minimum.
+            A hard min can make camera startup fail on some devices
+            or low-light conditions.
+          */
+          frameRate:{
+            ideal:30,
+            max:30
           }
         },
         audio:false
@@ -1046,11 +1083,50 @@ async function startCamera(){
 
     await $("preview").play();
 
+    /*
+      Browser/device may choose a lower FPS than requested.
+      Read the actual camera setting so we can warn the user.
+    */
+    try{
+      const videoTrack=
+        mediaStream.getVideoTracks()[0];
+
+      const settings=
+        videoTrack
+          ? videoTrack.getSettings()
+          : {};
+
+      actualCameraFrameRate=
+        settings.frameRate || null;
+    }catch(e){
+      actualCameraFrameRate=null;
+    }
+
     $("empty").classList.add("hidden");
 
     startGPS();
 
-    toast("Kamera aktif");
+    if(
+      actualCameraFrameRate &&
+      actualCameraFrameRate < 24
+    ){
+      toast(
+        "Kamera aktif · " +
+        actualCameraFrameRate.toFixed(1) +
+        " fps. Kondisi cahaya/perangkat dapat membuat video kurang halus."
+      );
+    }else{
+      toast(
+        "Kamera aktif" +
+        (
+          actualCameraFrameRate
+            ? " · " +
+              actualCameraFrameRate.toFixed(1) +
+              " fps"
+            : ""
+        )
+      );
+    }
   }catch(e){
     toast(
       "Kamera gagal dibuka: " +
@@ -1223,7 +1299,7 @@ function drawWatermarks(
     watermarkLogo.naturalWidth>0
   ){
     const logoW=
-      Math.round(width*0.18);
+      Math.round(width*0.15);
 
     const logoH=
       Math.round(
@@ -1253,13 +1329,36 @@ function drawWatermarks(
   }
 
   /* -------------------------
-     KANAN ATAS
+     KANAN ATAS - COMPACT
+     Lebar panel mengikuti visual STA, bukan % lebar frame.
   ------------------------- */
+  const staFontSize=
+    Math.round(height*0.052);
+
+  ctx.font=
+    `800 ${staFontSize}px Arial`;
+
+  const staTextWidth=
+    ctx.measureText(state.staText).width;
+
+  const topInnerPad=
+    Math.round(height*0.022);
+
+  /*
+    Sedikit ruang ekstra untuk Jalur/Segmen, tetapi tetap
+    terasa selebar STA, bukan panel panjang.
+  */
   const topW=
-    Math.round(width*0.34);
+    Math.max(
+      Math.round(width*0.155),
+      Math.min(
+        Math.round(width*0.225),
+        Math.round(staTextWidth + topInnerPad*2.2)
+      )
+    );
 
   const topH=
-    Math.round(height*0.19);
+    Math.round(height*0.150);
 
   const topX=
     width-pad-topW;
@@ -1268,7 +1367,7 @@ function drawWatermarks(
     pad;
 
   ctx.fillStyle=
-    "rgba(10,12,14,.72)";
+    "rgba(10,12,14,.58)";
 
   ctx.fillRect(
     topX,
@@ -1280,9 +1379,9 @@ function drawWatermarks(
   drawText(
     ctx,
     "LOKASI STA",
-    topX+topW-22,
-    topY+16,
-    Math.round(height*0.020),
+    topX+topW-topInnerPad,
+    topY+Math.round(height*0.010),
+    Math.round(height*0.014),
     false,
     "right",
     "#c4c9ce"
@@ -1291,9 +1390,9 @@ function drawWatermarks(
   drawText(
     ctx,
     state.staText,
-    topX+topW-22,
-    topY+40,
-    Math.round(height*0.058),
+    topX+topW-topInnerPad,
+    topY+Math.round(height*0.032),
+    staFontSize,
     true,
     "right"
   );
@@ -1301,58 +1400,36 @@ function drawWatermarks(
   drawText(
     ctx,
     `Jalur ${state.lane}`,
-    topX+topW-22,
-    topY+Math.round(topH*0.61),
-    Math.round(height*0.027),
+    topX+topW-topInnerPad,
+    topY+Math.round(height*0.091),
+    Math.round(height*0.019),
     true,
     "right"
   );
 
   ctx.font=
-    `500 ${Math.round(height*0.020)}px Arial`;
+    `500 ${Math.round(height*0.0135)}px Arial`;
 
   const segment=
     fitText(
       ctx,
       state.segment,
-      topW-44
+      topW-topInnerPad*2
     );
 
   drawText(
     ctx,
     segment,
-    topX+topW-22,
-    topY+Math.round(topH*0.79),
-    Math.round(height*0.020),
+    topX+topW-topInnerPad,
+    topY+Math.round(height*0.119),
+    Math.round(height*0.0135),
     false,
     "right"
   );
 
   /* -------------------------
-     KIRI BAWAH
+     KIRI BAWAH - SINGLE LINE
   ------------------------- */
-  const bottomW=
-    Math.round(width*0.36);
-
-  const bottomH=
-    Math.round(height*0.18);
-
-  const bottomX=
-    pad;
-
-  const bottomY=
-    height-pad-bottomH;
-
-  ctx.fillStyle=
-    "rgba(10,12,14,.72)";
-
-  ctx.fillRect(
-    bottomX,
-    bottomY,
-    bottomW,
-    bottomH
-  );
-
   const coord=
     (
       state.lat!=null &&
@@ -1371,73 +1448,156 @@ function drawWatermarks(
       ? `${state.offset.toFixed(1)} m`
       : "-- m";
 
-  const lines=[
-    ["Koordinat",coord],
-    ["Speed",speed],
-    ["Offset Alignment",offset],
-    ["Status Sistem",state.status]
+  const techFont=
+    Math.round(height*0.0145);
+
+  const labelFont=
+    Math.round(height*0.0135);
+
+  const gap=
+    Math.round(width*0.010);
+
+  const separator=
+    "  •  ";
+
+  const items=[
+    ["Koordinat ",coord],
+    ["Speed ",speed],
+    ["Offset ",offset],
+    ["Status ",state.status]
   ];
 
-  const labelX=
-    bottomX+20;
+  /*
+    Measure full line so panel width follows content.
+  */
+  let measuredWidth=0;
 
-  const valueX=
-    bottomX+Math.round(bottomW*0.34);
+  items.forEach((item,index)=>{
+    ctx.font=
+      `500 ${labelFont}px Arial`;
 
-  const firstY=
-    bottomY+16;
+    measuredWidth+=
+      ctx.measureText(item[0]).width;
 
-  const rowGap=
-    Math.round(bottomH/4.4);
+    ctx.font=
+      `800 ${techFont}px Arial`;
 
-  lines.forEach(
-    (row,index)=>{
-      const yy=
-        firstY+
-        index*rowGap;
+    measuredWidth+=
+      ctx.measureText(item[1]).width;
 
+    if(index<items.length-1){
+      ctx.font=
+        `500 ${labelFont}px Arial`;
+
+      measuredWidth+=
+        ctx.measureText(separator).width;
+    }
+  });
+
+  const bottomPadX=
+    Math.round(width*0.010);
+
+  const bottomW=
+    Math.min(
+      width-pad*2,
+      Math.round(measuredWidth + bottomPadX*2)
+    );
+
+  const bottomH=
+    Math.round(height*0.050);
+
+  const bottomX=
+    pad;
+
+  const bottomY=
+    height-pad-bottomH;
+
+  ctx.fillStyle=
+    "rgba(10,12,14,.58)";
+
+  ctx.fillRect(
+    bottomX,
+    bottomY,
+    bottomW,
+    bottomH
+  );
+
+  let cursorX=
+    bottomX+bottomPadX;
+
+  const textY=
+    bottomY+
+    Math.round(height*0.0155);
+
+  items.forEach((item,index)=>{
+    drawText(
+      ctx,
+      item[0],
+      cursorX,
+      textY,
+      labelFont,
+      false,
+      "left",
+      "#c4c9ce"
+    );
+
+    ctx.font=
+      `500 ${labelFont}px Arial`;
+
+    cursorX+=
+      ctx.measureText(item[0]).width;
+
+    let valueColor="#fff";
+
+    if(item[0].trim()==="Status"){
+      if(state.status==="GPS READY"){
+        valueColor="#34c77b";
+      }else if(
+        state.status==="OFF ROUTE" ||
+        state.status==="DATABASE ERROR"
+      ){
+        valueColor="#ff5f5f";
+      }else{
+        valueColor="#f6bf3c";
+      }
+    }
+
+    drawText(
+      ctx,
+      item[1],
+      cursorX,
+      textY,
+      techFont,
+      true,
+      "left",
+      valueColor
+    );
+
+    ctx.font=
+      `800 ${techFont}px Arial`;
+
+    cursorX+=
+      ctx.measureText(item[1]).width;
+
+    if(index<items.length-1){
       drawText(
         ctx,
-        row[0],
-        labelX,
-        yy,
-        Math.round(height*0.018),
+        separator,
+        cursorX,
+        textY,
+        labelFont,
         false,
         "left",
-        "#c4c9ce"
+        "rgba(255,255,255,.40)"
       );
 
-      let color="#fff";
+      ctx.font=
+        `500 ${labelFont}px Arial`;
 
-      if(
-        row[0]==="Status Sistem"
-      ){
-        if(
-          state.status==="GPS READY"
-        ){
-          color="#34c77b";
-        }else if(
-          state.status==="OFF ROUTE" ||
-          state.status==="DATABASE ERROR"
-        ){
-          color="#ff5f5f";
-        }else{
-          color="#f6bf3c";
-        }
-      }
-
-      drawText(
-        ctx,
-        row[1],
-        valueX,
-        yy,
-        Math.round(height*0.019),
-        true,
-        "left",
-        color
-      );
+      cursorX+=
+        ctx.measureText(separator).width;
     }
-  );
+  });
 }
 
 /* =========================================================
@@ -1533,25 +1693,22 @@ function scheduleVideoFrames(){
   if(
     typeof video.requestVideoFrameCallback==="function"
   ){
+    /*
+      No artificial 30 fps gate here.
+      requestVideoFrameCallback already fires when a real camera frame
+      becomes available. Each real frame is composited exactly once.
+
+      This avoids the 33.1 ms vs 33.333 ms jitter problem that can
+      accidentally turn a 30 fps source into an uneven ~20 fps stream.
+    */
     videoFrameCallbackId=
       video.requestVideoFrameCallback(
-        (now)=>{
+        ()=>{
           if(!isRecording()){
             return;
           }
 
-          /*
-            Cap work to ~30 fps if camera provides higher frame rate.
-          */
-          const minInterval=
-            1000/VIDEO_TARGET_FPS;
-
-          if(
-            now-lastFrameTime >= minInterval
-          ){
-            compositeVideoFrame();
-            lastFrameTime=now;
-          }
+          compositeVideoFrame();
 
           scheduleVideoFrames();
         }
@@ -1944,8 +2101,6 @@ async function startVideoRecording(){
   recordingStartedAt=
     Date.now();
 
-  lastFrameTime=0;
-
   $("recBadge").classList.add(
     "show"
   );
@@ -1980,6 +2135,13 @@ async function startVideoRecording(){
       videoUsesManualFrames
         ? "manual frame sync"
         : "30 fps fallback"
+    ) +
+    (
+      actualCameraFrameRate
+        ? " · camera " +
+          actualCameraFrameRate.toFixed(1) +
+          " fps"
+        : ""
     ) +
     " · " +
     videoFormat.label +
