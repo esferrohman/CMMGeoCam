@@ -13,111 +13,351 @@
   --green:#34c77b; --yellow:#f6bf3c; --red:#ff5f5f;
 }
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;background:#000;color:var(--text);font-family:Arial,Helvetica,sans-serif}
+html,body{
+  margin:0;width:100%;height:100%;background:#000;color:var(--text);
+  font-family:Arial,Helvetica,sans-serif
+}
 body{overflow:hidden}
 .app{position:relative;width:100vw;height:100dvh;background:#000}
-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050607}
-
-.top-info{
-  position:absolute;right:14px;top:14px;max-width:min(52vw,440px);
-  padding:11px 13px;background:var(--panel);border:1px solid var(--line);
-  border-radius:12px;text-align:right;backdrop-filter:blur(7px);
+video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;background:#050607
 }
-.sta-label{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.10em}
-.sta-value{font-size:34px;line-height:1;font-weight:900;margin-top:3px}
-.top-row{font-size:12px;font-weight:700;margin-top:7px}
-.segment{font-size:11px;line-height:1.25;color:#eef1f4;margin-top:4px}
+
+/* =========================================================
+   WATERMARK PREVIEW
+========================================================= */
+.top-info{
+  position:absolute;right:14px;top:14px;
+  max-width:min(52vw,440px);
+  padding:11px 13px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  text-align:right;
+  backdrop-filter:blur(7px);
+}
+.sta-label{
+  font-size:10px;color:var(--muted);
+  font-weight:700;letter-spacing:.10em
+}
+.sta-value{
+  font-size:34px;line-height:1;
+  font-weight:900;margin-top:3px
+}
+.top-row{
+  font-size:12px;font-weight:700;margin-top:7px
+}
+.segment{
+  font-size:11px;line-height:1.25;
+  color:#eef1f4;margin-top:4px
+}
 
 .tech-info{
-  position:absolute;left:14px;bottom:92px;max-width:min(62vw,480px);
-  padding:10px 12px;background:var(--panel);border:1px solid var(--line);
-  border-radius:12px;backdrop-filter:blur(7px)
+  position:absolute;left:14px;bottom:126px;
+  max-width:min(68vw,480px);
+  padding:10px 12px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  backdrop-filter:blur(7px)
 }
-.tech-row{display:grid;grid-template-columns:116px 1fr;gap:8px;font-size:11px;line-height:1.45}
+.tech-row{
+  display:grid;
+  grid-template-columns:116px 1fr;
+  gap:8px;
+  font-size:11px;
+  line-height:1.45
+}
 .tech-row .k{color:var(--muted)}
 .tech-row .v{font-weight:750}
 .status-ready{color:var(--green)}
 .status-wait{color:var(--yellow)}
 .status-bad{color:var(--red)}
 
-.bottom{
-  position:absolute;left:0;right:0;bottom:0;height:78px;
-  display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.72) 28%,rgba(0,0,0,.92) 100%)
-}
-.shutter{
-  width:62px;height:62px;border-radius:50%;border:4px solid #fff;background:transparent;
-  display:grid;place-items:center;cursor:pointer
-}
-.shutter:before{content:"";width:48px;height:48px;background:#fff;border-radius:50%}
-
 .topbar{
-  position:absolute;left:14px;top:14px;display:flex;gap:8px;align-items:center
+  position:absolute;left:14px;top:14px;
+  display:flex;gap:8px;align-items:center
 }
 .pill{
-  padding:8px 10px;border-radius:999px;background:rgba(10,12,14,.72);border:1px solid var(--line);
-  font-size:10px;font-weight:800;backdrop-filter:blur(7px)
+  padding:8px 10px;
+  border-radius:999px;
+  background:rgba(10,12,14,.72);
+  border:1px solid var(--line);
+  font-size:10px;font-weight:800;
+  backdrop-filter:blur(7px)
 }
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-right:6px}
-.dot.ok{background:var(--green)} .dot.bad{background:var(--red)}
+.dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--yellow);margin-right:6px
+}
+.dot.ok{background:var(--green)}
+.dot.bad{background:var(--red)}
 
+.rec-badge{
+  display:none;
+  position:absolute;left:14px;top:58px;
+  padding:7px 10px;border-radius:999px;
+  background:rgba(190,20,28,.88);
+  font-size:10px;font-weight:900;
+  letter-spacing:.03em;
+  backdrop-filter:blur(7px)
+}
+.rec-badge.show{display:block}
+
+/* =========================================================
+   CAMERA CONTROLS
+========================================================= */
+.bottom{
+  position:absolute;
+  left:0;right:0;bottom:0;
+  min-height:112px;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding-bottom:10px;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(0,0,0,.56) 28%,
+      rgba(0,0,0,.94) 100%
+    )
+}
+.capture-controls{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px
+}
+.mode-switch{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:24px
+}
+.mode-btn{
+  border:0;
+  background:transparent;
+  color:rgba(255,255,255,.56);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  padding:4px 7px;
+  cursor:pointer
+}
+.mode-btn.active{color:#fff}
+.mode-btn.active:after{
+  content:"";
+  display:block;
+  width:22px;height:2px;
+  margin:5px auto 0;
+  border-radius:3px;
+  background:var(--accent)
+}
+
+.shutter{
+  width:62px;height:62px;
+  border-radius:50%;
+  border:4px solid #fff;
+  background:transparent;
+  display:grid;
+  place-items:center;
+  cursor:pointer
+}
+.shutter:before{
+  content:"";
+  width:48px;height:48px;
+  background:#fff;
+  border-radius:50%;
+  transition:.15s ease
+}
+.shutter.video:before{background:var(--red)}
+.shutter.recording:before{
+  width:28px;height:28px;
+  border-radius:7px;
+  background:var(--red)
+}
+
+/* =========================================================
+   START SCREEN / TOAST
+========================================================= */
 .empty{
-  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  background:radial-gradient(circle,#262a30,#07090b 68%);text-align:center;padding:28px;z-index:4
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle,#262a30,#07090b 68%);
+  text-align:center;padding:28px;z-index:4
 }
 .empty.hidden{display:none}
 .empty h1{font-size:22px;margin:0 0 8px}
-.empty p{font-size:12px;line-height:1.5;color:#b8bec4;margin:0 auto;max-width:420px}
-.btn{margin-top:16px;border:0;border-radius:10px;padding:11px 16px;background:var(--accent);color:#111;font-weight:900;cursor:pointer}
-
-.toast{
-  position:absolute;left:50%;bottom:88px;transform:translate(-50%,12px);
-  background:#fff;color:#111;padding:9px 12px;border-radius:10px;font-size:11px;font-weight:750;
-  opacity:0;pointer-events:none;transition:.2s;z-index:10
+.empty p{
+  font-size:12px;line-height:1.5;
+  color:#b8bec4;margin:0 auto;max-width:420px
 }
-.toast.show{opacity:1;transform:translate(-50%,0)}
+.btn{
+  margin-top:16px;border:0;border-radius:10px;
+  padding:11px 16px;background:var(--accent);
+  color:#111;font-weight:900;cursor:pointer
+}
+.toast{
+  position:absolute;left:50%;bottom:120px;
+  transform:translate(-50%,12px);
+  max-width:calc(100vw - 28px);
+  background:#fff;color:#111;
+  padding:9px 12px;border-radius:10px;
+  font-size:11px;font-weight:750;
+  opacity:0;pointer-events:none;
+  transition:.2s;z-index:10;
+  text-align:center
+}
+.toast.show{
+  opacity:1;
+  transform:translate(-50%,0)
+}
 canvas{display:none}
+
+/* =========================================================
+   LANDSCAPE
+   Posisi logis watermark tetap:
+   kanan atas = STA/Jalur/Segmen
+   kiri bawah = data teknis
+========================================================= */
+@media (orientation: landscape){
+  .top-info{
+    right:18px;top:18px;
+    max-width:min(38vw,520px);
+    padding:10px 13px
+  }
+  .sta-value{font-size:40px}
+  .segment{font-size:11px}
+
+  .topbar{left:18px;top:18px}
+  .rec-badge{left:18px;top:60px}
+
+  .tech-info{
+    left:18px;
+    bottom:18px;
+    max-width:min(42vw,560px);
+    padding:9px 12px
+  }
+
+  .bottom{
+    left:50%;
+    right:auto;
+    width:180px;
+    transform:translateX(-50%);
+    min-height:96px;
+    background:
+      linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(0,0,0,.38) 30%,
+        rgba(0,0,0,.74) 100%
+      );
+    border-radius:26px 26px 0 0;
+  }
+
+  .toast{bottom:104px}
+}
+
+/* ruang aman untuk layar yang sangat kecil */
+@media (max-width:480px) and (orientation:portrait){
+  .top-info{max-width:48vw}
+  .sta-value{font-size:30px}
+  .segment{font-size:10px}
+  .tech-info{max-width:72vw}
+  .tech-row{
+    grid-template-columns:106px 1fr;
+    font-size:10px
+  }
+}
 </style>
 </head>
+
 <body>
 <div class="app">
   <video id="preview" playsinline muted></video>
 
   <div class="topbar">
-    <div class="pill"><span id="gpsDot" class="dot"></span><span id="gpsLabel">GPS WAIT</span></div>
+    <div class="pill">
+      <span id="gpsDot" class="dot"></span>
+      <span id="gpsLabel">GPS WAIT</span>
+    </div>
   </div>
 
+  <div class="rec-badge" id="recBadge">
+    ● REC <span id="recTimer">00:00</span>
+  </div>
+
+  <!-- WATERMARK KANAN ATAS -->
   <div class="top-info">
     <div class="sta-label">LOKASI STA</div>
     <div class="sta-value" id="staValue">--+---</div>
-    <div class="top-row">Jalur <span id="laneValue">--</span></div>
-    <div class="segment" id="segmentValue">Menunggu Database Alignment</div>
+    <div class="top-row">
+      Jalur <span id="laneValue">--</span>
+    </div>
+    <div class="segment" id="segmentValue">
+      Menunggu Database Alignment
+    </div>
   </div>
 
+  <!-- WATERMARK KIRI BAWAH -->
   <div class="tech-info">
-    <div class="tech-row"><div class="k">Koordinat</div><div class="v" id="coordValue">--, --</div></div>
-    <div class="tech-row"><div class="k">Speed</div><div class="v" id="speedValue">-- km/h</div></div>
-    <div class="tech-row"><div class="k">Offset Alignment</div><div class="v" id="offsetValue">-- m</div></div>
-    <div class="tech-row"><div class="k">Status Sistem</div><div class="v status-wait" id="systemValue">GPS WAIT</div></div>
+    <div class="tech-row">
+      <div class="k">Koordinat</div>
+      <div class="v" id="coordValue">--, --</div>
+    </div>
+    <div class="tech-row">
+      <div class="k">Speed</div>
+      <div class="v" id="speedValue">-- km/h</div>
+    </div>
+    <div class="tech-row">
+      <div class="k">Offset Alignment</div>
+      <div class="v" id="offsetValue">-- m</div>
+    </div>
+    <div class="tech-row">
+      <div class="k">Status Sistem</div>
+      <div class="v status-wait" id="systemValue">GPS WAIT</div>
+    </div>
   </div>
 
+  <!-- FOTO / VIDEO -->
   <div class="bottom">
-    <button class="shutter" id="shutter" aria-label="Ambil foto"></button>
+    <div class="capture-controls">
+      <div class="mode-switch">
+        <button class="mode-btn active" id="photoModeBtn" type="button">FOTO</button>
+        <button class="mode-btn" id="videoModeBtn" type="button">VIDEO</button>
+      </div>
+
+      <button
+        class="shutter"
+        id="shutter"
+        type="button"
+        aria-label="Ambil foto">
+      </button>
+    </div>
   </div>
 
   <div class="empty" id="empty">
     <div>
       <h1>CMM GeoCam</h1>
-      <p>Prototype PWA untuk dokumentasi visual berbasis GPS dan Database Alignment. Aktifkan kamera, lalu izinkan lokasi presisi.</p>
+      <p>
+        Prototype PWA untuk dokumentasi visual berbasis GPS dan
+        Database Alignment. Aktifkan kamera, lalu izinkan lokasi presisi.
+      </p>
       <button class="btn" id="startBtn">Mulai Kamera</button>
     </div>
   </div>
 
   <canvas id="captureCanvas"></canvas>
+  <canvas id="videoCanvas"></canvas>
   <div class="toast" id="toast"></div>
 </div>
 
 <script>
+/* =========================================================
+   CONFIG
+========================================================= */
 const MAX_GPS_ACCURACY = 38;
 const MAX_OFFSET = 45;
 const HISTORY_SIZE = 7;
@@ -131,223 +371,1206 @@ let lockedLane = null;
 let pendingLane = null;
 let laneConfirm = 0;
 
+/* FOTO / VIDEO */
+let captureMode = "photo";
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingAnimation = null;
+let recordingTimer = null;
+let recordingStartedAt = 0;
+
 const state = {
-  staText:"--+---", segment:"Menunggu Database Alignment", lane:"--",
-  lat:null, lon:null, speedKmh:null, accuracy:null, offset:null, status:"GPS WAIT"
+  staText:"--+---",
+  segment:"Menunggu Database Alignment",
+  lane:"--",
+  lat:null,
+  lon:null,
+  speedKmh:null,
+  accuracy:null,
+  offset:null,
+  status:"GPS WAIT"
 };
 
 const $ = id => document.getElementById(id);
 
+/* =========================================================
+   UI HELPERS
+========================================================= */
 function toast(msg){
-  const t=$("toast"); t.textContent=msg; t.classList.add("show");
-  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2200);
+  const t=$("toast");
+  t.textContent=msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>t.classList.remove("show"),2200);
 }
+
 function formatSTA(v){
-  let km=Math.floor(v/1000), m=Math.round(v%1000);
-  if(m>=1000){km++;m-=1000}
+  let km=Math.floor(v/1000);
+  let m=Math.round(v%1000);
+  if(m>=1000){
+    km++;
+    m-=1000;
+  }
   return km+"+"+String(m).padStart(3,"0");
 }
+
 function distance(lat1,lon1,lat2,lon2){
-  const R=6371000, p=x=>x*Math.PI/180;
-  const dLat=p(lat2-lat1), dLon=p(lon2-lon1);
-  const a=Math.sin(dLat/2)**2 + Math.cos(p(lat1))*Math.cos(p(lat2))*Math.sin(dLon/2)**2;
+  const R=6371000;
+  const p=x=>x*Math.PI/180;
+
+  const dLat=p(lat2-lat1);
+  const dLon=p(lon2-lon1);
+
+  const a=
+    Math.sin(dLat/2)**2 +
+    Math.cos(p(lat1)) *
+    Math.cos(p(lat2)) *
+    Math.sin(dLon/2)**2;
+
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
+
+/* =========================================================
+   DATABASE ALIGNMENT
+========================================================= */
 function parseCSV(text){
-  const rows=text.split(/\r?\n/), out=[];
+  const rows=text.split(/\r?\n/);
+  const out=[];
+
   for(let i=1;i<rows.length;i++){
-    const line=rows[i].trim(); if(!line) continue;
-    const c=line.split(","); if(c.length<4) continue;
-    const sta=parseFloat(c[0]), lat=parseFloat(c[1]), lon=parseFloat(c[2]);
+    const line=rows[i].trim();
+    if(!line) continue;
+
+    const c=line.split(",");
+    if(c.length<4) continue;
+
+    const sta=parseFloat(c[0]);
+    const lat=parseFloat(c[1]);
+    const lon=parseFloat(c[2]);
+
     if([sta,lat,lon].some(Number.isNaN)) continue;
-    out.push({sta,lat,lon,segment:c.slice(3).join(",").trim()});
+
+    out.push({
+      sta,
+      lat,
+      lon,
+      segment:c.slice(3).join(",").trim()
+    });
   }
+
   out.sort((a,b)=>a.sta-b.sta);
   return out;
 }
+
 async function loadDatabase(){
   try{
-    const r=await fetch("./STA_Tamer.csv?ts="+Date.now());
-    if(!r.ok) throw new Error("Database tidak ditemukan");
+    const r=await fetch("./STA_Tamer.csv");
+
+    if(!r.ok){
+      throw new Error("Database tidak ditemukan");
+    }
+
     staData=parseCSV(await r.text());
-    toast("Database Alignment siap: "+staData.length.toLocaleString("id-ID")+" titik");
+
+    toast(
+      "Database Alignment siap: " +
+      staData.length.toLocaleString("id-ID") +
+      " titik"
+    );
   }catch(e){
-    state.status="DATABASE ERROR"; render();
+    state.status="DATABASE ERROR";
+    render();
     toast("STA_Tamer.csv tidak ditemukan.");
   }
 }
+
+/* =========================================================
+   STA MATCHING
+========================================================= */
 function nearest(lat,lon){
-  if(!staData.length) return {idx:-1,dist:Infinity};
-  let lo=0, hi=staData.length-1;
+  if(!staData.length){
+    return {idx:-1,dist:Infinity};
+  }
+
+  let lo=0;
+  let hi=staData.length-1;
+
   while(hi-lo>1){
     const mid=(lo+hi)>>1;
-    const d1=distance(lat,lon,staData[mid].lat,staData[mid].lon);
-    const d2=distance(lat,lon,staData[mid+1].lat,staData[mid+1].lon);
-    if(d1<d2) hi=mid; else lo=mid+1;
+
+    const d1=distance(
+      lat,lon,
+      staData[mid].lat,
+      staData[mid].lon
+    );
+
+    const d2=distance(
+      lat,lon,
+      staData[mid+1].lat,
+      staData[mid+1].lon
+    );
+
+    if(d1<d2){
+      hi=mid;
+    }else{
+      lo=mid+1;
+    }
   }
-  let best=lo, min=Infinity;
-  for(let i=Math.max(0,lo-NEIGHBOR_CHECK);i<=Math.min(staData.length-1,lo+NEIGHBOR_CHECK);i++){
-    const d=distance(lat,lon,staData[i].lat,staData[i].lon);
-    if(d<min){min=d;best=i}
+
+  let best=lo;
+  let min=Infinity;
+
+  for(
+    let i=Math.max(0,lo-NEIGHBOR_CHECK);
+    i<=Math.min(staData.length-1,lo+NEIGHBOR_CHECK);
+    i++
+  ){
+    const d=distance(
+      lat,lon,
+      staData[i].lat,
+      staData[i].lon
+    );
+
+    if(d<min){
+      min=d;
+      best=i;
+    }
   }
-  return {idx:best,dist:min};
+
+  return {
+    idx:best,
+    dist:min
+  };
 }
+
+/* =========================================================
+   JALUR A / B
+========================================================= */
 function detectLane(){
-  if(staHistory.length<4) return;
+  if(staHistory.length<4){
+    return;
+  }
+
   let trend=0;
+
   for(let i=1;i<staHistory.length;i++){
     const d=staHistory[i]-staHistory[i-1];
-    if(d>1) trend++; else if(d<-1) trend--;
+
+    if(d>1){
+      trend++;
+    }else if(d<-1){
+      trend--;
+    }
   }
-  const net=staHistory.at(-1)-staHistory[0];
+
+  const net=
+    staHistory[staHistory.length-1] -
+    staHistory[0];
+
   let detected=null;
-  if(trend>=2 && net>=MIN_DIRECTION_DELTA) detected="A";
-  else if(trend<=-2 && net<=-MIN_DIRECTION_DELTA) detected="B";
-  else return;
+
+  if(
+    trend>=2 &&
+    net>=MIN_DIRECTION_DELTA
+  ){
+    detected="A";
+  }else if(
+    trend<=-2 &&
+    net<=-MIN_DIRECTION_DELTA
+  ){
+    detected="B";
+  }else{
+    return;
+  }
 
   if(!lockedLane){
     if(detected===pendingLane){
       laneConfirm++;
-      if(laneConfirm>=3){lockedLane=detected;pendingLane=null;laneConfirm=0}
-    }else{pendingLane=detected;laneConfirm=1}
+
+      if(laneConfirm>=3){
+        lockedLane=detected;
+        pendingLane=null;
+        laneConfirm=0;
+      }
+    }else{
+      pendingLane=detected;
+      laneConfirm=1;
+    }
   }else if(detected!==lockedLane){
     if(detected===pendingLane){
       laneConfirm++;
-      if(laneConfirm>=5){lockedLane=detected;pendingLane=null;laneConfirm=0}
-    }else{pendingLane=detected;laneConfirm=1}
+
+      if(laneConfirm>=5){
+        lockedLane=detected;
+        pendingLane=null;
+        laneConfirm=0;
+      }
+    }else{
+      pendingLane=detected;
+      laneConfirm=1;
+    }
   }else{
-    pendingLane=null; laneConfirm=0;
+    pendingLane=null;
+    laneConfirm=0;
   }
 }
+
+/* =========================================================
+   GPS
+========================================================= */
 function updatePosition(pos){
   state.lat=pos.coords.latitude;
   state.lon=pos.coords.longitude;
   state.accuracy=pos.coords.accuracy;
-  state.speedKmh=(pos.coords.speed==null || Number.isNaN(pos.coords.speed)) ? 0 : Math.max(0,pos.coords.speed*3.6);
 
-  if(!staData.length){state.status="DATABASE WAIT"; render(); return;}
-  if(state.accuracy>MAX_GPS_ACCURACY){state.status="GPS LOW"; render(); return;}
+  state.speedKmh=
+    (
+      pos.coords.speed==null ||
+      Number.isNaN(pos.coords.speed)
+    )
+      ? 0
+      : Math.max(0,pos.coords.speed*3.6);
 
-  const n=nearest(state.lat,state.lon);
+  if(!staData.length){
+    state.status="DATABASE WAIT";
+    render();
+    return;
+  }
+
+  if(state.accuracy>MAX_GPS_ACCURACY){
+    state.status="GPS LOW";
+    render();
+    return;
+  }
+
+  const n=nearest(
+    state.lat,
+    state.lon
+  );
+
   state.offset=n.dist;
+
   if(n.dist>MAX_OFFSET){
-    state.status="OFF ROUTE"; state.staText="--+---"; state.segment="Di luar koridor alignment";
-    render(); return;
+    state.status="OFF ROUTE";
+    state.staText="--+---";
+    state.segment="Di luar koridor alignment";
+    render();
+    return;
   }
 
   const p=staData[n.idx];
+
   state.staText=formatSTA(p.sta);
   state.segment=p.segment;
-  staHistory.push(p.sta);
-  if(staHistory.length>HISTORY_SIZE) staHistory.shift();
-  detectLane();
-  state.lane=lockedLane || "--";
-  state.status="GPS READY";
-  render();
-}
-function render(){
-  $("staValue").textContent=state.staText;
-  $("laneValue").textContent=state.lane;
-  $("segmentValue").textContent=state.segment;
-  $("coordValue").textContent=(state.lat!=null && state.lon!=null) ? `${state.lat.toFixed(6)}, ${state.lon.toFixed(6)}` : "--, --";
-  $("speedValue").textContent=state.speedKmh!=null ? `${state.speedKmh.toFixed(1)} km/h` : "-- km/h";
-  $("offsetValue").textContent=state.offset!=null ? `${state.offset.toFixed(1)} m` : "-- m";
-  $("systemValue").textContent=state.status;
 
-  const status=$("systemValue"), dot=$("gpsDot"), label=$("gpsLabel");
-  status.className="v "+(state.status==="GPS READY"?"status-ready":(state.status==="OFF ROUTE"||state.status==="DATABASE ERROR"?"status-bad":"status-wait"));
-  dot.className="dot "+(state.status==="GPS READY"?"ok":(state.status==="OFF ROUTE"||state.status==="DATABASE ERROR"?"bad":""));
-  label.textContent=state.status;
+  staHistory.push(p.sta);
+
+  if(staHistory.length>HISTORY_SIZE){
+    staHistory.shift();
+  }
+
+  detectLane();
+
+  state.lane=
+    lockedLane ||
+    "--";
+
+  state.status="GPS READY";
+
+  render();
 }
 
 function startGPS(){
-  if(!navigator.geolocation){toast("GPS tidak didukung browser.");return}
-  navigator.geolocation.watchPosition(updatePosition, e=>toast("GPS: "+(e.message||"tidak tersedia")), {
-    enableHighAccuracy:true, maximumAge:0, timeout:8000
-  });
+  if(!navigator.geolocation){
+    toast("GPS tidak didukung browser.");
+    return;
+  }
+
+  navigator.geolocation.watchPosition(
+    updatePosition,
+    e=>{
+      toast(
+        "GPS: " +
+        (e.message||"tidak tersedia")
+      );
+    },
+    {
+      enableHighAccuracy:true,
+      maximumAge:0,
+      timeout:8000
+    }
+  );
 }
+
+/* =========================================================
+   RENDER PREVIEW
+========================================================= */
+function render(){
+  $("staValue").textContent=
+    state.staText;
+
+  $("laneValue").textContent=
+    state.lane;
+
+  $("segmentValue").textContent=
+    state.segment;
+
+  $("coordValue").textContent=
+    (
+      state.lat!=null &&
+      state.lon!=null
+    )
+      ? `${state.lat.toFixed(6)}, ${state.lon.toFixed(6)}`
+      : "--, --";
+
+  $("speedValue").textContent=
+    state.speedKmh!=null
+      ? `${state.speedKmh.toFixed(1)} km/h`
+      : "-- km/h";
+
+  $("offsetValue").textContent=
+    state.offset!=null
+      ? `${state.offset.toFixed(1)} m`
+      : "-- m";
+
+  $("systemValue").textContent=
+    state.status;
+
+  const status=$("systemValue");
+  const dot=$("gpsDot");
+  const label=$("gpsLabel");
+
+  const isReady=
+    state.status==="GPS READY";
+
+  const isBad=
+    (
+      state.status==="OFF ROUTE" ||
+      state.status==="DATABASE ERROR"
+    );
+
+  status.className=
+    "v " +
+    (
+      isReady
+        ? "status-ready"
+        : (
+            isBad
+              ? "status-bad"
+              : "status-wait"
+          )
+    );
+
+  dot.className=
+    "dot " +
+    (
+      isReady
+        ? "ok"
+        : (
+            isBad
+              ? "bad"
+              : ""
+          )
+    );
+
+  label.textContent=
+    state.status;
+}
+
+/* =========================================================
+   CAMERA
+========================================================= */
 async function startCamera(){
   try{
-    mediaStream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},
-      audio:false
-    });
-    $("preview").srcObject=mediaStream;
+    mediaStream=
+      await navigator.mediaDevices.getUserMedia({
+        video:{
+          facingMode:{
+            ideal:"environment"
+          },
+          width:{
+            ideal:1920
+          },
+          height:{
+            ideal:1080
+          }
+        },
+        audio:false
+      });
+
+    $("preview").srcObject=
+      mediaStream;
+
     await $("preview").play();
+
     $("empty").classList.add("hidden");
+
     startGPS();
+
     toast("Kamera aktif");
   }catch(e){
-    toast("Kamera gagal dibuka: "+(e.message||e.name));
+    toast(
+      "Kamera gagal dibuka: " +
+      (e.message||e.name)
+    );
   }
 }
 
-function drawText(ctx,text,x,y,size,bold=true,align="left"){
-  ctx.font=`${bold?800:500} ${size}px Arial`;
-  ctx.textAlign=align;ctx.textBaseline="top";
-  ctx.fillStyle="#fff";ctx.fillText(text,x,y);
+/* =========================================================
+   FOTO / VIDEO MODE
+========================================================= */
+function isRecording(){
+  return (
+    mediaRecorder &&
+    mediaRecorder.state==="recording"
+  );
 }
-function capturePhoto(){
-  if(!mediaStream){toast("Aktifkan kamera terlebih dahulu.");return}
-  if(state.status!=="GPS READY"){toast("Tunggu Status Sistem: GPS READY.");return}
 
-  const v=$("preview"), c=$("captureCanvas"), ctx=c.getContext("2d");
-  c.width=1920;c.height=1080;
+function setCaptureMode(mode){
+  if(isRecording()){
+    toast(
+      "Hentikan rekaman sebelum mengganti mode."
+    );
+    return;
+  }
 
-  // cover crop
-  const vw=v.videoWidth||1920,vh=v.videoHeight||1080;
-  const scale=Math.max(c.width/vw,c.height/vh);
-  const sw=c.width/scale,sh=c.height/scale,sx=(vw-sw)/2,sy=(vh-sh)/2;
-  ctx.drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);
+  captureMode=mode;
 
-  // top-right
-  const pad=34, boxW=650, boxH=190, x=c.width-pad-boxW, y=pad;
-  ctx.fillStyle="rgba(10,12,14,.72)";ctx.fillRect(x,y,boxW,boxH);
-  drawText(ctx,"LOKASI STA",x+boxW-24,y+18,22,false,"right");
-  drawText(ctx,state.staText,x+boxW-24,y+45,62,true,"right");
-  drawText(ctx,`Jalur ${state.lane}`,x+boxW-24,y+116,28,true,"right");
-  drawText(ctx,state.segment,x+boxW-24,y+152,22,false,"right");
+  const photo=
+    mode==="photo";
 
-  // bottom-left
-  const bW=650,bH=190,bx=pad,by=c.height-pad-bH;
-  ctx.fillStyle="rgba(10,12,14,.72)";ctx.fillRect(bx,by,bW,bH);
+  $("photoModeBtn").classList.toggle(
+    "active",
+    photo
+  );
+
+  $("videoModeBtn").classList.toggle(
+    "active",
+    !photo
+  );
+
+  $("shutter").classList.toggle(
+    "video",
+    !photo
+  );
+
+  $("shutter").setAttribute(
+    "aria-label",
+    photo
+      ? "Ambil foto"
+      : "Mulai video"
+  );
+}
+
+/* =========================================================
+   CANVAS / WATERMARK
+========================================================= */
+function drawText(
+  ctx,
+  text,
+  x,
+  y,
+  size,
+  bold=true,
+  align="left",
+  color="#fff"
+){
+  ctx.font=
+    `${bold?800:500} ${size}px Arial`;
+
+  ctx.textAlign=
+    align;
+
+  ctx.textBaseline=
+    "top";
+
+  ctx.fillStyle=
+    color;
+
+  ctx.fillText(
+    text,
+    x,
+    y
+  );
+}
+
+function fitText(
+  ctx,
+  text,
+  maxWidth
+){
+  if(
+    ctx.measureText(text).width<=maxWidth
+  ){
+    return text;
+  }
+
+  let output=text;
+
+  while(
+    output.length>1 &&
+    ctx.measureText(
+      output+"…"
+    ).width>maxWidth
+  ){
+    output=
+      output.slice(0,-1);
+  }
+
+  return output+"…";
+}
+
+function drawCameraFrame(
+  ctx,
+  canvas
+){
+  const v=$("preview");
+
+  const vw=
+    v.videoWidth||1920;
+
+  const vh=
+    v.videoHeight||1080;
+
+  const scale=
+    Math.max(
+      canvas.width/vw,
+      canvas.height/vh
+    );
+
+  const sw=
+    canvas.width/scale;
+
+  const sh=
+    canvas.height/scale;
+
+  const sx=
+    (vw-sw)/2;
+
+  const sy=
+    (vh-sh)/2;
+
+  ctx.drawImage(
+    v,
+    sx,sy,sw,sh,
+    0,0,
+    canvas.width,
+    canvas.height
+  );
+}
+
+/*
+   Renderer watermark tunggal.
+   Dipakai FOTO dan VIDEO supaya hasil konsisten.
+*/
+function drawWatermarks(
+  ctx,
+  width,
+  height
+){
+  const pad=
+    Math.round(width*0.018);
+
+  /* -------------------------
+     KANAN ATAS
+  ------------------------- */
+  const topW=
+    Math.round(width*0.34);
+
+  const topH=
+    Math.round(height*0.19);
+
+  const topX=
+    width-pad-topW;
+
+  const topY=
+    pad;
+
+  ctx.fillStyle=
+    "rgba(10,12,14,.72)";
+
+  ctx.fillRect(
+    topX,
+    topY,
+    topW,
+    topH
+  );
+
+  drawText(
+    ctx,
+    "LOKASI STA",
+    topX+topW-22,
+    topY+16,
+    Math.round(height*0.020),
+    false,
+    "right",
+    "#c4c9ce"
+  );
+
+  drawText(
+    ctx,
+    state.staText,
+    topX+topW-22,
+    topY+40,
+    Math.round(height*0.058),
+    true,
+    "right"
+  );
+
+  drawText(
+    ctx,
+    `Jalur ${state.lane}`,
+    topX+topW-22,
+    topY+Math.round(topH*0.61),
+    Math.round(height*0.027),
+    true,
+    "right"
+  );
+
+  ctx.font=
+    `500 ${Math.round(height*0.020)}px Arial`;
+
+  const segment=
+    fitText(
+      ctx,
+      state.segment,
+      topW-44
+    );
+
+  drawText(
+    ctx,
+    segment,
+    topX+topW-22,
+    topY+Math.round(topH*0.79),
+    Math.round(height*0.020),
+    false,
+    "right"
+  );
+
+  /* -------------------------
+     KIRI BAWAH
+  ------------------------- */
+  const bottomW=
+    Math.round(width*0.36);
+
+  const bottomH=
+    Math.round(height*0.18);
+
+  const bottomX=
+    pad;
+
+  const bottomY=
+    height-pad-bottomH;
+
+  ctx.fillStyle=
+    "rgba(10,12,14,.72)";
+
+  ctx.fillRect(
+    bottomX,
+    bottomY,
+    bottomW,
+    bottomH
+  );
+
+  const coord=
+    (
+      state.lat!=null &&
+      state.lon!=null
+    )
+      ? `${state.lat.toFixed(6)}, ${state.lon.toFixed(6)}`
+      : "--, --";
+
+  const speed=
+    state.speedKmh!=null
+      ? `${state.speedKmh.toFixed(1)} km/h`
+      : "-- km/h";
+
+  const offset=
+    state.offset!=null
+      ? `${state.offset.toFixed(1)} m`
+      : "-- m";
+
   const lines=[
-    ["Koordinat",`${state.lat.toFixed(6)}, ${state.lon.toFixed(6)}`],
-    ["Speed",`${state.speedKmh.toFixed(1)} km/h`],
-    ["Offset Alignment",`${state.offset.toFixed(1)} m`],
+    ["Koordinat",coord],
+    ["Speed",speed],
+    ["Offset Alignment",offset],
     ["Status Sistem",state.status]
   ];
-  lines.forEach((r,i)=>{
-    const yy=by+18+i*42;
-    drawText(ctx,r[0],bx+22,yy,20,false,"left");
-    drawText(ctx,r[1],bx+205,yy,22,true,"left");
-  });
 
-  c.toBlob(blob=>{
-    if(!blob)return;
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;
-    a.download=`CMMGeoCam_STA_${state.staText.replace("+","-")}_${Date.now()}.jpg`;
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),3000);
-    toast("Foto tersimpan dengan watermark.");
-  },"image/jpeg",.92);
+  const labelX=
+    bottomX+20;
+
+  const valueX=
+    bottomX+Math.round(bottomW*0.34);
+
+  const firstY=
+    bottomY+16;
+
+  const rowGap=
+    Math.round(bottomH/4.4);
+
+  lines.forEach(
+    (row,index)=>{
+      const yy=
+        firstY+
+        index*rowGap;
+
+      drawText(
+        ctx,
+        row[0],
+        labelX,
+        yy,
+        Math.round(height*0.018),
+        false,
+        "left",
+        "#c4c9ce"
+      );
+
+      let color="#fff";
+
+      if(
+        row[0]==="Status Sistem"
+      ){
+        if(
+          state.status==="GPS READY"
+        ){
+          color="#34c77b";
+        }else if(
+          state.status==="OFF ROUTE" ||
+          state.status==="DATABASE ERROR"
+        ){
+          color="#ff5f5f";
+        }else{
+          color="#f6bf3c";
+        }
+      }
+
+      drawText(
+        ctx,
+        row[1],
+        valueX,
+        yy,
+        Math.round(height*0.019),
+        true,
+        "left",
+        color
+      );
+    }
+  );
 }
 
-$("startBtn").addEventListener("click",startCamera);
-$("shutter").addEventListener("click",capturePhoto);
+/* =========================================================
+   PHOTO
+========================================================= */
+function canStartCapture(){
+  if(!mediaStream){
+    toast(
+      "Aktifkan kamera terlebih dahulu."
+    );
+    return false;
+  }
 
+  if(state.status!=="GPS READY"){
+    toast(
+      "Tunggu Status Sistem: GPS READY."
+    );
+    return false;
+  }
+
+  return true;
+}
+
+function capturePhoto(){
+  if(!canStartCapture()){
+    return;
+  }
+
+  const c=
+    $("captureCanvas");
+
+  const ctx=
+    c.getContext("2d");
+
+  c.width=1920;
+  c.height=1080;
+
+  drawCameraFrame(
+    ctx,
+    c
+  );
+
+  drawWatermarks(
+    ctx,
+    c.width,
+    c.height
+  );
+
+  c.toBlob(
+    blob=>{
+      if(!blob){
+        return;
+      }
+
+      const url=
+        URL.createObjectURL(blob);
+
+      const a=
+        document.createElement("a");
+
+      a.href=
+        url;
+
+      a.download=
+        `CMMGeoCam_STA_${state.staText.replace("+","-")}_${Date.now()}.jpg`;
+
+      a.click();
+
+      setTimeout(
+        ()=>URL.revokeObjectURL(url),
+        3000
+      );
+
+      toast(
+        "Foto tersimpan dengan watermark."
+      );
+    },
+    "image/jpeg",
+    .92
+  );
+}
+
+/* =========================================================
+   VIDEO
+   Video dibuat dari canvas sehingga watermark
+   benar-benar tertanam dan berubah dinamis selama mobil bergerak.
+========================================================= */
+function supportedVideoMime(){
+  if(
+    !window.MediaRecorder
+  ){
+    return "";
+  }
+
+  const types=[
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm"
+  ];
+
+  return (
+    types.find(
+      type=>
+        MediaRecorder.isTypeSupported(type)
+    ) ||
+    ""
+  );
+}
+
+function drawRecordingFrame(){
+  if(!isRecording()){
+    return;
+  }
+
+  const c=
+    $("videoCanvas");
+
+  const ctx=
+    c.getContext("2d");
+
+  drawCameraFrame(
+    ctx,
+    c
+  );
+
+  drawWatermarks(
+    ctx,
+    c.width,
+    c.height
+  );
+
+  recordingAnimation=
+    requestAnimationFrame(
+      drawRecordingFrame
+    );
+}
+
+function updateRecordingTimer(){
+  const elapsed=
+    Math.floor(
+      (
+        Date.now() -
+        recordingStartedAt
+      )/1000
+    );
+
+  const minute=
+    Math.floor(
+      elapsed/60
+    );
+
+  const second=
+    elapsed%60;
+
+  $("recTimer").textContent=
+    String(minute).padStart(2,"0") +
+    ":" +
+    String(second).padStart(2,"0");
+}
+
+function startVideoRecording(){
+  if(!canStartCapture()){
+    return;
+  }
+
+  if(
+    !window.MediaRecorder ||
+    !$("videoCanvas").captureStream
+  ){
+    toast(
+      "Browser ini belum mendukung perekaman video watermark."
+    );
+    return;
+  }
+
+  const c=
+    $("videoCanvas");
+
+  /*
+    MVP video 1280x720.
+    Lebih ringan daripada 1920x1080 untuk smartphone.
+  */
+  c.width=1280;
+  c.height=720;
+
+  const ctx=
+    c.getContext("2d");
+
+  /*
+    Gambar frame pertama sebelum captureStream dimulai.
+  */
+  drawCameraFrame(
+    ctx,
+    c
+  );
+
+  drawWatermarks(
+    ctx,
+    c.width,
+    c.height
+  );
+
+  const canvasStream=
+    c.captureStream(30);
+
+  const mime=
+    supportedVideoMime();
+
+  try{
+    mediaRecorder=
+      new MediaRecorder(
+        canvasStream,
+        mime
+          ? {
+              mimeType:mime,
+              videoBitsPerSecond:4000000
+            }
+          : {
+              videoBitsPerSecond:4000000
+            }
+      );
+  }catch(e){
+    toast(
+      "MediaRecorder video tidak dapat dimulai."
+    );
+    return;
+  }
+
+  recordedChunks=[];
+
+  mediaRecorder.ondataavailable=
+    event=>{
+      if(
+        event.data &&
+        event.data.size>0
+      ){
+        recordedChunks.push(
+          event.data
+        );
+      }
+    };
+
+  mediaRecorder.onstop=
+    ()=>{
+      if(recordingAnimation){
+        cancelAnimationFrame(
+          recordingAnimation
+        );
+      }
+
+      const blob=
+        new Blob(
+          recordedChunks,
+          {
+            type:
+              mediaRecorder.mimeType ||
+              "video/webm"
+          }
+        );
+
+      const url=
+        URL.createObjectURL(blob);
+
+      const a=
+        document.createElement("a");
+
+      a.href=
+        url;
+
+      a.download=
+        `CMMGeoCam_VIDEO_STA_${state.staText.replace("+","-")}_${Date.now()}.webm`;
+
+      a.click();
+
+      setTimeout(
+        ()=>URL.revokeObjectURL(url),
+        5000
+      );
+
+      toast(
+        "Video tersimpan dengan watermark dinamis."
+      );
+    };
+
+  mediaRecorder.start(500);
+
+  recordingStartedAt=
+    Date.now();
+
+  $("recBadge").classList.add(
+    "show"
+  );
+
+  $("shutter").classList.add(
+    "recording"
+  );
+
+  $("shutter").setAttribute(
+    "aria-label",
+    "Hentikan video"
+  );
+
+  updateRecordingTimer();
+
+  recordingTimer=
+    setInterval(
+      updateRecordingTimer,
+      500
+    );
+
+  drawRecordingFrame();
+
+  toast(
+    "Perekaman video dimulai."
+  );
+}
+
+function stopVideoRecording(){
+  if(!isRecording()){
+    return;
+  }
+
+  mediaRecorder.stop();
+
+  clearInterval(
+    recordingTimer
+  );
+
+  if(recordingAnimation){
+    cancelAnimationFrame(
+      recordingAnimation
+    );
+  }
+
+  $("recBadge").classList.remove(
+    "show"
+  );
+
+  $("shutter").classList.remove(
+    "recording"
+  );
+
+  $("recTimer").textContent=
+    "00:00";
+
+  $("shutter").setAttribute(
+    "aria-label",
+    "Mulai video"
+  );
+}
+
+/* =========================================================
+   EVENTS
+========================================================= */
+$("startBtn").addEventListener(
+  "click",
+  startCamera
+);
+
+$("photoModeBtn").addEventListener(
+  "click",
+  ()=>setCaptureMode("photo")
+);
+
+$("videoModeBtn").addEventListener(
+  "click",
+  ()=>setCaptureMode("video")
+);
+
+$("shutter").addEventListener(
+  "click",
+  ()=>{
+    if(captureMode==="photo"){
+      capturePhoto();
+      return;
+    }
+
+    if(isRecording()){
+      stopVideoRecording();
+    }else{
+      startVideoRecording();
+    }
+  }
+);
+
+/* =========================================================
+   INIT
+========================================================= */
 loadDatabase();
 render();
+setCaptureMode("photo");
 
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./service-worker.js").catch(console.error);
-  });
+if(
+  "serviceWorker" in navigator
+){
+  window.addEventListener(
+    "load",
+    ()=>{
+      navigator.serviceWorker
+        .register("./service-worker.js")
+        .catch(console.error);
+    }
+  );
 }
+
 if(!window.isSecureContext){
-  setTimeout(()=>toast("PWA perlu HTTPS atau localhost agar kamera/GPS bekerja."),800);
+  setTimeout(
+    ()=>{
+      toast(
+        "PWA perlu HTTPS atau localhost agar kamera/GPS bekerja."
+      );
+    },
+    800
+  );
 }
 </script>
 </body>
