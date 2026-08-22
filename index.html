@@ -128,6 +128,53 @@ video{
 .dot.ok{background:var(--green)}
 .dot.bad{background:var(--red)}
 
+.stab-pill{
+  border:1px solid var(--line);
+  color:#fff;
+  cursor:pointer;
+  text-align:left;
+}
+.stab-pill.off{color:#c4c9ce}
+.stab-pill.active{color:var(--green)}
+.stab-pill.native{color:#8fd7ff}
+
+.diag-panel{
+  display:none;
+  position:absolute;
+  left:18px;
+  top:154px;
+  z-index:12;
+  width:min(320px,42vw);
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(7,9,11,.86);
+  backdrop-filter:blur(8px);
+  font-size:10px;
+  line-height:1.45;
+  box-shadow:0 8px 24px rgba(0,0,0,.28)
+}
+.diag-panel.show{display:block}
+.diag-title{
+  font-weight:900;
+  letter-spacing:.08em;
+  margin-bottom:7px
+}
+.diag-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:3px 0;
+  border-top:1px solid rgba(255,255,255,.07)
+}
+.diag-row:first-of-type{border-top:0}
+.diag-k{color:var(--muted)}
+.diag-v{
+  font-weight:800;
+  text-align:right;
+  word-break:break-word
+}
+
 .rec-badge{
   display:none;
   position:absolute;left:14px;top:58px;
@@ -380,6 +427,41 @@ canvas{display:none}
       <span id="gpsDot" class="dot"></span>
       <span id="gpsLabel">GPS WAIT</span>
     </div>
+    <button class="pill stab-pill off" id="stabToggle" type="button">
+      STAB: CHECK
+    </button>
+  </div>
+
+  <div class="diag-panel" id="diagPanel">
+    <div class="diag-title">CAMERA DIAGNOSTIC</div>
+    <div class="diag-row">
+      <span class="diag-k">Camera Input</span>
+      <span class="diag-v" id="diagCameraInput">--</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Camera FPS</span>
+      <span class="diag-v" id="diagCameraFps">--</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Gyroscope</span>
+      <span class="diag-v" id="diagGyro">CHECKING</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Gyro Rate</span>
+      <span class="diag-v" id="diagGyroRate">--</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Native EIS</span>
+      <span class="diag-v" id="diagNativeEis">CHECKING</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Output</span>
+      <span class="diag-v">1280 × 720</span>
+    </div>
+    <div class="diag-row">
+      <span class="diag-k">Stabilizer</span>
+      <span class="diag-v" id="diagStabilizer">CHECKING</span>
+    </div>
   </div>
 
   <div class="rec-badge" id="recBadge">
@@ -478,15 +560,25 @@ let recordingTimer = null;
 let recordingStartedAt = 0;
 
 /*
-   Prototype 6 Corrected video profile.
-   Camera request: 1280x720
-   Output: 1280x720
-   Frame push: manual when supported
+   Prototype 12 video profile.
+   Higher camera input is requested as overscan workspace.
+   Recording output remains 1280x720.
 */
 const VIDEO_WIDTH = 1280;
 const VIDEO_HEIGHT = 720;
 const VIDEO_TARGET_FPS = 30;
 const VIDEO_BITRATE = 4000000;
+
+const CAMERA_IDEAL_WIDTH = 1920;
+const CAMERA_IDEAL_HEIGHT = 1080;
+
+const EIS_CROP_RATIO = 0.84;
+const EIS_MIN_OVERSCAN_RATIO = 1.15;
+const EIS_SENSOR_TARGET_HZ = 100;
+const EIS_HP_TAU = 0.32;
+const EIS_ANGLE_DECAY_TAU = 0.22;
+const EIS_GAIN_X = 0.78;
+const EIS_GAIN_Y = 0.72;
 
 let videoCanvasTrack = null;
 let videoUsesManualFrames = false;
@@ -495,6 +587,34 @@ let videoFallbackTimer = null;
 let overlayDirty = true;
 
 let actualCameraFrameRate = null;
+let actualCameraWidth = null;
+let actualCameraHeight = null;
+
+let stabilizerMode = "CHECKING";
+let stabilizationUserEnabled = true;
+
+let nativeEISKey = null;
+let nativeEISApplied = false;
+
+let gyroSensor = null;
+let gyroSource = null;
+let gyroAvailable = false;
+let gyroRunning = false;
+let gyroRateHz = 0;
+let gyroSampleCount = 0;
+let gyroRateWindowStarted = 0;
+let gyroLastTimestamp = 0;
+
+let gyroLowX = 0;
+let gyroLowY = 0;
+let gyroAngleX = 0;
+let gyroAngleY = 0;
+
+let eisOffsetX = 0;
+let eisOffsetY = 0;
+let eisHasOverscan = false;
+
+let deviceMotionPermission = null;
 
 const state = {
   staText:"--+---",
@@ -635,6 +755,427 @@ function distance(lat1,lon1,lat2,lon2){
     Math.sin(dLon/2)**2;
 
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/* =========================================================
+   CAMERA / STABILIZATION
+========================================================= */
+function setDiag(id,value){
+  const el=$(id);
+  if(el) el.textContent=value;
+}
+
+function updateStabilizerUI(){
+  const btn=$("stabToggle");
+
+  if(btn){
+    btn.classList.remove("off","active","native");
+
+    if(stabilizerMode==="NATIVE EIS"){
+      btn.classList.add("native");
+      btn.textContent="STAB: NATIVE";
+    }else if(stabilizerMode==="GYRO EIS"){
+      btn.classList.add("active");
+      btn.textContent="STAB: GYRO";
+    }else{
+      btn.classList.add("off");
+      btn.textContent=
+        stabilizationUserEnabled
+          ? "STAB: "+stabilizerMode.replace(" EIS","")
+          : "STAB: OFF";
+    }
+  }
+
+  setDiag(
+    "diagCameraInput",
+    actualCameraWidth && actualCameraHeight
+      ? `${actualCameraWidth} × ${actualCameraHeight}`
+      : "--"
+  );
+
+  setDiag(
+    "diagCameraFps",
+    actualCameraFrameRate
+      ? actualCameraFrameRate.toFixed(1)+" fps"
+      : "--"
+  );
+
+  setDiag(
+    "diagGyro",
+    gyroAvailable
+      ? "AVAILABLE" + (gyroSource ? " · "+gyroSource : "")
+      : "NOT AVAILABLE"
+  );
+
+  setDiag(
+    "diagGyroRate",
+    gyroRateHz>0
+      ? gyroRateHz.toFixed(0)+" Hz"
+      : "--"
+  );
+
+  setDiag(
+    "diagNativeEis",
+    nativeEISApplied
+      ? "APPLIED"
+      : (
+          nativeEISKey
+            ? "EXPOSED · NOT APPLIED"
+            : "NOT EXPOSED"
+        )
+  );
+
+  setDiag(
+    "diagStabilizer",
+    stabilizationUserEnabled
+      ? stabilizerMode
+      : "OFF · USER"
+  );
+}
+
+function detectNativeEISConstraint(){
+  try{
+    const supported=
+      navigator.mediaDevices.getSupportedConstraints();
+
+    const candidates=[
+      "videoStabilizationMode",
+      "stabilizationMode",
+      "imageStabilization"
+    ];
+
+    nativeEISKey=
+      candidates.find(
+        key=>supported[key]===true
+      ) || null;
+  }catch(e){
+    nativeEISKey=null;
+  }
+
+  updateStabilizerUI();
+  return nativeEISKey;
+}
+
+async function tryApplyNativeEIS(track){
+  nativeEISApplied=false;
+
+  if(!track || !nativeEISKey){
+    updateStabilizerUI();
+    return false;
+  }
+
+  const attempts=[];
+
+  if(nativeEISKey==="imageStabilization"){
+    attempts.push({
+      advanced:[{imageStabilization:true}]
+    });
+  }else{
+    attempts.push({
+      advanced:[{[nativeEISKey]:"auto"}]
+    });
+    attempts.push({
+      advanced:[{[nativeEISKey]:"on"}]
+    });
+  }
+
+  for(const constraints of attempts){
+    try{
+      await track.applyConstraints(constraints);
+      nativeEISApplied=true;
+      stabilizerMode="NATIVE EIS";
+      updateStabilizerUI();
+      return true;
+    }catch(e){}
+  }
+
+  updateStabilizerUI();
+  return false;
+}
+
+async function prepareDeviceMotionPermission(){
+  if(
+    typeof window.DeviceMotionEvent==="undefined" ||
+    typeof DeviceMotionEvent.requestPermission!=="function"
+  ){
+    return;
+  }
+
+  try{
+    deviceMotionPermission=
+      await DeviceMotionEvent.requestPermission();
+  }catch(e){
+    deviceMotionPermission="denied";
+  }
+}
+
+function resetGyroFilter(){
+  gyroLastTimestamp=0;
+  gyroLowX=0;
+  gyroLowY=0;
+  gyroAngleX=0;
+  gyroAngleY=0;
+  eisOffsetX=0;
+  eisOffsetY=0;
+}
+
+function updateOverscanAvailability(){
+  eisHasOverscan=
+    !!(
+      actualCameraWidth &&
+      actualCameraHeight &&
+      actualCameraWidth >= VIDEO_WIDTH*EIS_MIN_OVERSCAN_RATIO &&
+      actualCameraHeight >= VIDEO_HEIGHT*EIS_MIN_OVERSCAN_RATIO
+    );
+}
+
+function updateStabilizerMode(){
+  if(!stabilizationUserEnabled){
+    stabilizerMode="OFF";
+  }else if(nativeEISApplied){
+    stabilizerMode="NATIVE EIS";
+  }else if(gyroAvailable && gyroRunning && eisHasOverscan){
+    stabilizerMode="GYRO EIS";
+  }else if(gyroAvailable && !eisHasOverscan){
+    stabilizerMode="OFF · NO OVERSCAN";
+  }else if(gyroAvailable && !gyroRunning){
+    stabilizerMode="GYRO WAIT";
+  }else{
+    stabilizerMode="OFF";
+  }
+
+  updateStabilizerUI();
+}
+
+function isGyroEISActive(){
+  return (
+    stabilizationUserEnabled &&
+    stabilizerMode==="GYRO EIS"
+  );
+}
+
+function processGyroSample(rawX,rawY,timestampMs){
+  if(!Number.isFinite(rawX) || !Number.isFinite(rawY)){
+    return;
+  }
+
+  const now=timestampMs || performance.now();
+
+  if(!gyroLastTimestamp){
+    gyroLastTimestamp=now;
+    gyroRateWindowStarted=now;
+    gyroSampleCount=0;
+    return;
+  }
+
+  let dt=(now-gyroLastTimestamp)/1000;
+  gyroLastTimestamp=now;
+
+  if(dt<=0 || dt>0.1){
+    return;
+  }
+
+  gyroSampleCount++;
+
+  const rateElapsed=
+    now-gyroRateWindowStarted;
+
+  if(rateElapsed>=1000){
+    gyroRateHz=
+      gyroSampleCount/(rateElapsed/1000);
+
+    gyroSampleCount=0;
+    gyroRateWindowStarted=now;
+    updateStabilizerUI();
+  }
+
+  /*
+    Slow pan goes into the low-pass term.
+    Fast vibration remains in the high-pass residual.
+  */
+  const lpA=
+    dt/(EIS_HP_TAU+dt);
+
+  gyroLowX += lpA*(rawX-gyroLowX);
+  gyroLowY += lpA*(rawY-gyroLowY);
+
+  const hpX=rawX-gyroLowX;
+  const hpY=rawY-gyroLowY;
+
+  /*
+    Damped integration prevents long-term drift while retaining
+    short high-frequency correction.
+  */
+  const decay=
+    Math.exp(-dt/EIS_ANGLE_DECAY_TAU);
+
+  gyroAngleX=
+    gyroAngleX*decay + hpX*dt;
+
+  gyroAngleY=
+    gyroAngleY*decay + hpY*dt;
+
+  const pxPerRadX=
+    VIDEO_WIDTH/1.15;
+
+  const pxPerRadY=
+    VIDEO_HEIGHT/0.85;
+
+  let targetX=
+    -gyroAngleY *
+    pxPerRadX *
+    EIS_GAIN_X;
+
+  let targetY=
+    gyroAngleX *
+    pxPerRadY *
+    EIS_GAIN_Y;
+
+  const orientationAngle=
+    (
+      screen.orientation &&
+      Number.isFinite(screen.orientation.angle)
+    )
+      ? screen.orientation.angle
+      : 90;
+
+  if(orientationAngle===270){
+    targetX*=-1;
+    targetY*=-1;
+  }
+
+  eisOffsetX=
+    eisOffsetX*0.72 +
+    targetX*0.28;
+
+  eisOffsetY=
+    eisOffsetY*0.72 +
+    targetY*0.28;
+}
+
+async function startGenericGyroscope(){
+  if(typeof window.Gyroscope!=="function"){
+    return false;
+  }
+
+  try{
+    gyroSensor=
+      new Gyroscope({
+        frequency:EIS_SENSOR_TARGET_HZ
+      });
+
+    gyroSensor.addEventListener(
+      "reading",
+      ()=>{
+        const wasRunning=gyroRunning;
+
+        gyroAvailable=true;
+        gyroRunning=true;
+        gyroSource="Generic Sensor";
+
+        processGyroSample(
+          gyroSensor.x,
+          gyroSensor.y,
+          performance.now()
+        );
+
+        if(!wasRunning){
+          updateStabilizerMode();
+        }
+      }
+    );
+
+    gyroSensor.addEventListener(
+      "error",
+      ()=>{
+        gyroRunning=false;
+        updateStabilizerMode();
+      }
+    );
+
+    gyroSensor.start();
+
+    gyroAvailable=true;
+    gyroSource="Generic Sensor";
+    updateStabilizerMode();
+    return true;
+  }catch(e){
+    gyroSensor=null;
+    return false;
+  }
+}
+
+async function startDeviceMotionGyro(){
+  if(typeof window.DeviceMotionEvent==="undefined"){
+    return false;
+  }
+
+  if(
+    typeof DeviceMotionEvent.requestPermission==="function" &&
+    deviceMotionPermission!=="granted"
+  ){
+    return false;
+  }
+
+  try{
+    window.addEventListener(
+      "devicemotion",
+      event=>{
+        const r=event.rotationRate;
+        if(!r) return;
+
+        const toRad=Math.PI/180;
+        const x=Number(r.beta)*toRad;
+        const y=Number(r.gamma)*toRad;
+
+        if(Number.isFinite(x) && Number.isFinite(y)){
+          const wasRunning=gyroRunning;
+
+          gyroAvailable=true;
+          gyroRunning=true;
+          gyroSource="DeviceMotion";
+
+          processGyroSample(
+            x,
+            y,
+            performance.now()
+          );
+
+          if(!wasRunning){
+            updateStabilizerMode();
+          }
+        }
+      },
+      {passive:true}
+    );
+
+    gyroAvailable=true;
+    gyroSource="DeviceMotion";
+    updateStabilizerMode();
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+async function startGyroEIS(){
+  resetGyroFilter();
+
+  let started=
+    await startGenericGyroscope();
+
+  if(!started){
+    started=
+      await startDeviceMotionGyro();
+  }
+
+  if(!started){
+    gyroAvailable=false;
+    gyroRunning=false;
+  }
+
+  updateStabilizerMode();
+  return started;
 }
 
 /* =========================================================
@@ -1045,6 +1586,14 @@ async function tryForceLandscape(){
    CAMERA
 ========================================================= */
 async function startCamera(){
+  detectNativeEISConstraint();
+
+  /*
+    DeviceMotion permission (notably Safari/iOS) must be requested
+    from the user gesture before other asynchronous camera work.
+  */
+  await prepareDeviceMotionPermission();
+
   /*
     Harus dipanggil langsung dari tap user agar browser
     punya peluang mengizinkan fullscreen/orientation lock.
@@ -1059,10 +1608,10 @@ async function startCamera(){
             ideal:"environment"
           },
           width:{
-            ideal:1280
+            ideal:CAMERA_IDEAL_WIDTH
           },
           height:{
-            ideal:720
+            ideal:CAMERA_IDEAL_HEIGHT
           },
           /*
             Request 30 fps, but do not set a hard minimum.
@@ -1082,12 +1631,10 @@ async function startCamera(){
 
     await $("preview").play();
 
-    /*
-      Browser/device may choose a lower FPS than requested.
-      Read the actual camera setting so we can warn the user.
-    */
+    let videoTrack=null;
+
     try{
-      const videoTrack=
+      videoTrack=
         mediaStream.getVideoTracks()[0];
 
       const settings=
@@ -1097,33 +1644,71 @@ async function startCamera(){
 
       actualCameraFrameRate=
         settings.frameRate || null;
+
+      actualCameraWidth=
+        settings.width ||
+        $("preview").videoWidth ||
+        null;
+
+      actualCameraHeight=
+        settings.height ||
+        $("preview").videoHeight ||
+        null;
     }catch(e){
       actualCameraFrameRate=null;
+      actualCameraWidth=
+        $("preview").videoWidth || null;
+      actualCameraHeight=
+        $("preview").videoHeight || null;
+    }
+
+    updateOverscanAvailability();
+
+    /*
+      Priority:
+      Native camera stabilization -> Gyro EIS -> OFF.
+    */
+    const nativeOK=
+      await tryApplyNativeEIS(videoTrack);
+
+    if(!nativeOK){
+      await startGyroEIS();
+    }else{
+      updateStabilizerMode();
     }
 
     $("empty").classList.add("hidden");
 
     startGPS();
+    updateStabilizerUI();
+
+    const cameraText=
+      actualCameraWidth && actualCameraHeight
+        ? `${actualCameraWidth}×${actualCameraHeight}`
+        : "Camera";
 
     if(
       actualCameraFrameRate &&
       actualCameraFrameRate < 24
     ){
       toast(
-        "Kamera aktif · " +
+        cameraText +
+        " · " +
         actualCameraFrameRate.toFixed(1) +
-        " fps. Kondisi cahaya/perangkat dapat membuat video kurang halus."
+        " fps · " +
+        stabilizerMode +
+        ". FPS rendah dapat membuat video kurang halus."
       );
     }else{
       toast(
-        "Kamera aktif" +
+        cameraText +
         (
           actualCameraFrameRate
-            ? " · " +
-              actualCameraFrameRate.toFixed(1) +
-              " fps"
+            ? " · "+actualCameraFrameRate.toFixed(1)+" fps"
             : ""
-        )
+        ) +
+        " · " +
+        stabilizerMode
       );
     }
   }catch(e){
@@ -1245,32 +1830,97 @@ function drawCameraFrame(
   const v=$("preview");
 
   const vw=
-    v.videoWidth||1920;
+    v.videoWidth ||
+    actualCameraWidth ||
+    CAMERA_IDEAL_WIDTH;
 
   const vh=
-    v.videoHeight||1080;
+    v.videoHeight ||
+    actualCameraHeight ||
+    CAMERA_IDEAL_HEIGHT;
 
-  const scale=
+  const targetAspect=
+    canvas.width/canvas.height;
+
+  let baseW=vw;
+  let baseH=baseW/targetAspect;
+
+  if(baseH>vh){
+    baseH=vh;
+    baseW=baseH*targetAspect;
+  }
+
+  let cropW=baseW;
+  let cropH=baseH;
+
+  /*
+    Software EIS intentionally zooms into the larger camera input.
+    This creates a margin in which the source crop can move.
+  */
+  if(isGyroEISActive()){
+    cropW=baseW*EIS_CROP_RATIO;
+    cropH=baseH*EIS_CROP_RATIO;
+  }
+
+  const maxShiftX=
+    Math.max(0,(baseW-cropW)/2);
+
+  const maxShiftY=
+    Math.max(0,(baseH-cropH)/2);
+
+  const sourcePerOutputX=
+    cropW/canvas.width;
+
+  const sourcePerOutputY=
+    cropH/canvas.height;
+
+  const shiftX=
+    isGyroEISActive()
+      ? Math.max(
+          -maxShiftX,
+          Math.min(
+            maxShiftX,
+            eisOffsetX*sourcePerOutputX
+          )
+        )
+      : 0;
+
+  const shiftY=
+    isGyroEISActive()
+      ? Math.max(
+          -maxShiftY,
+          Math.min(
+            maxShiftY,
+            eisOffsetY*sourcePerOutputY
+          )
+        )
+      : 0;
+
+  let sx=
+    (vw-baseW)/2 +
+    (baseW-cropW)/2 +
+    shiftX;
+
+  let sy=
+    (vh-baseH)/2 +
+    (baseH-cropH)/2 +
+    shiftY;
+
+  sx=
     Math.max(
-      canvas.width/vw,
-      canvas.height/vh
+      0,
+      Math.min(vw-cropW,sx)
     );
 
-  const sw=
-    canvas.width/scale;
-
-  const sh=
-    canvas.height/scale;
-
-  const sx=
-    (vw-sw)/2;
-
-  const sy=
-    (vh-sh)/2;
+  sy=
+    Math.max(
+      0,
+      Math.min(vh-cropH,sy)
+    );
 
   ctx.drawImage(
     v,
-    sx,sy,sw,sh,
+    sx,sy,cropW,cropH,
     0,0,
     canvas.width,
     canvas.height
@@ -2144,6 +2794,8 @@ async function startVideoRecording(){
     ) +
     " · " +
     videoFormat.label +
+    " · " +
+    stabilizerMode +
     " · Logo MMS aktif"
   );
 }
@@ -2212,6 +2864,48 @@ $("shutter").addEventListener(
 );
 
 /* =========================================================
+   STABILIZATION DIAGNOSTIC
+========================================================= */
+$("stabToggle").addEventListener(
+  "click",
+  ()=>{
+    const panel=$("diagPanel");
+
+    if(!panel.classList.contains("show")){
+      panel.classList.add("show");
+      updateStabilizerUI();
+      return;
+    }
+
+    panel.classList.remove("show");
+
+    /*
+      Second tap toggles software EIS for A/B field comparison.
+      Native stabilization is left alone because vendor behavior
+      for disabling it is not standardized.
+    */
+    if(!nativeEISApplied){
+      stabilizationUserEnabled=
+        !stabilizationUserEnabled;
+
+      resetGyroFilter();
+      updateStabilizerMode();
+
+      toast(
+        stabilizationUserEnabled
+          ? "Stabilizer AUTO aktif"
+          : "Stabilizer OFF untuk perbandingan"
+      );
+    }
+  }
+);
+
+$("diagPanel").addEventListener(
+  "click",
+  event=>event.stopPropagation()
+);
+
+/* =========================================================
    STRICT ORIENTATION WATCH
 
    Jika perangkat diputar ke portrait saat video sedang direkam:
@@ -2220,6 +2914,8 @@ $("shutter").addEventListener(
    - user harus kembali ke landscape untuk recording berikutnya
 ========================================================= */
 function handleOrientationChange(){
+  resetGyroFilter();
+
   if(isLandscapeMode()){
     return;
   }
@@ -2260,6 +2956,9 @@ window.addEventListener(
 /* =========================================================
    INIT
 ========================================================= */
+detectNativeEISConstraint();
+updateStabilizerUI();
+
 loadDatabase();
 render();
 setCaptureMode("photo");
