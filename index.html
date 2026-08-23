@@ -30,9 +30,9 @@ video{
 .top-info{
   position:absolute;right:14px;top:14px;
   width:max-content;
-  min-width:140px;
-  max-width:min(31vw,270px);
-  padding:7px 9px;
+  min-width:150px;
+  max-width:min(35vw,320px);
+  padding:8px 10px;
   background:var(--panel);
   border:1px solid var(--line);
   border-radius:12px;
@@ -40,24 +40,44 @@ video{
   backdrop-filter:blur(7px);
 }
 .sta-label{
-  font-size:10px;color:var(--muted);
-  font-weight:700;letter-spacing:.10em
+  display:none;
 }
 .sta-value{
   font-size:32px;line-height:1;
-  font-weight:900;margin-top:2px;
-  white-space:nowrap
+  font-weight:900;
+  margin-top:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
 }
 .top-row{
-  font-size:11px;font-weight:700;margin-top:5px
+  font-size:22px;
+  line-height:1.05;
+  font-weight:900;
+  margin-top:5px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
 }
 .segment{
-  font-size:9px;line-height:1.15;
-  color:#eef1f4;margin-top:3px;
+  font-size:13px;
+  line-height:1.15;
+  color:#eef1f4;
+  margin-top:4px;
   max-width:100%;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap
+}
+.top-info.corridor-mode .sta-value{
+  font-size:29px
+}
+.top-info.corridor-mode .top-row{
+  font-size:18px
+}
+.top-info.corridor-mode .segment{
+  font-size:14px;
+  font-weight:800
 }
 
 .tech-info{
@@ -469,14 +489,12 @@ canvas{display:none}
   </div>
 
   <!-- WATERMARK KANAN ATAS -->
-  <div class="top-info">
-    <div class="sta-label">LOKASI STA</div>
-    <div class="sta-value" id="staValue">--+---</div>
-    <div class="top-row">
-      Jalur <span id="laneValue">--</span>
-    </div>
+  <div class="top-info" id="topInfo">
+    <div class="sta-label" id="topLabel"></div>
+    <div class="sta-value" id="staValue">STA --+---</div>
+    <div class="top-row" id="topRowValue">JALUR --</div>
     <div class="segment" id="segmentValue">
-      Menunggu Database Alignment
+      Menunggu Road Network Database
     </div>
   </div>
 
@@ -491,7 +509,7 @@ canvas{display:none}
       <div class="v" id="speedValue">-- km/h</div>
     </div>
     <div class="tech-row">
-      <div class="k">Offset Alignment</div>
+      <div class="k">Offset Network</div>
       <div class="v" id="offsetValue">-- m</div>
     </div>
     <div class="tech-row">
@@ -521,8 +539,8 @@ canvas{display:none}
     <div>
       <h1>CMM GeoCam</h1>
       <p>
-        Prototype PWA untuk dokumentasi visual berbasis GPS dan
-        Database Alignment. Aktifkan kamera, lalu izinkan lokasi presisi.
+        Prototype PWA untuk dokumentasi visual berbasis GPS,
+        Database Alignment, serta jaringan Ramp, Gate, dan Access. Aktifkan kamera, lalu izinkan lokasi presisi.
       </p>
       <button class="btn" id="startBtn">Mulai Kamera</button>
     </div>
@@ -540,11 +558,36 @@ canvas{display:none}
 ========================================================= */
 const MAX_GPS_ACCURACY = 38;
 const MAX_OFFSET = 45;
+const CORRIDOR_MAX_OFFSET = 45;
+
 const HISTORY_SIZE = 7;
 const NEIGHBOR_CHECK = 8;
 const MIN_DIRECTION_DELTA = 10;
 
+/*
+  Multi-Corridor route persistence.
+  A different valid network must be clearly closer and remain
+  consistent for several GPS fixes before the active network changes.
+*/
+const NETWORK_SWITCH_ADVANTAGE_M = 7;
+const NETWORK_CONFIRM_FIXES = 3;
+
+/*
+  Spatial grid for Corridor_Tamer.csv.
+  0.0015 degree is roughly 166 m latitude.
+  We inspect the surrounding 3x3 cells.
+*/
+const CORRIDOR_GRID_SIZE = 0.0015;
+
 let staData = [];
+let corridorData = [];
+let corridorGrid = new Map();
+let corridorGroups = new Map();
+
+let activeNetworkKey = null;
+let pendingNetworkKey = null;
+let pendingNetworkCount = 0;
+
 let mediaStream = null;
 let staHistory = [];
 let lockedLane = null;
@@ -559,6 +602,7 @@ let recordingAnimation = null;
 let recordingTimer = null;
 let recordingStartedAt = 0;
 let recorderUsesSingleFinalBlob = false;
+let recordingContextForFilename = "LOCATION";
 
 /*
    Prototype 12 video profile.
@@ -619,8 +663,18 @@ let deviceMotionPermission = null;
 
 const state = {
   staText:"--+---",
-  segment:"Menunggu Database Alignment",
+  segment:"Menunggu Road Network Database",
   lane:"--",
+
+  networkType:null,
+  networkKey:null,
+
+  corridorId:null,
+  location:null,
+  corridorDirection:null,
+  corridorMovement:null,
+  corridorDistance:null,
+
   lat:null,
   lon:null,
   speedKmh:null,
@@ -736,10 +790,52 @@ function filenameTimestamp(){
   return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
 }
 
-function safeSTAForFilename(){
-  return state.staText
-    .replace("+","-")
-    .replace(/[^0-9A-Za-z_-]/g,"");
+function safeToken(value){
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g,"_")
+    .replace(/[^0-9A-Z_-]/g,"");
+}
+
+function currentContextForFilename(){
+  if(state.networkType==="MAINLINE"){
+    return "STA_" +
+      state.staText
+        .replace("+","-")
+        .replace(/[^0-9A-Za-z_-]/g,"");
+  }
+
+  if(
+    state.networkType==="RAMP" ||
+    state.networkType==="GATE" ||
+    state.networkType==="ACCESS"
+  ){
+    const parts=[
+      state.location,
+      state.networkType,
+      state.corridorDirection &&
+      state.corridorDirection!=="-"
+        ? state.corridorDirection
+        : "",
+      state.corridorMovement,
+      state.networkType==="RAMP" &&
+      Number.isFinite(state.corridorDistance)
+        ? Math.round(state.corridorDistance)+"m"
+        : ""
+    ];
+
+    return parts
+      .map(safeToken)
+      .filter(Boolean)
+      .join("_");
+  }
+
+  return "LOCATION";
+}
+
+function isReadyStatus(value){
+  return String(value || "").startsWith("READY ·");
 }
 
 function distance(lat1,lon1,lat2,lon2){
@@ -1180,9 +1276,11 @@ async function startGyroEIS(){
 }
 
 /* =========================================================
-   DATABASE ALIGNMENT
+   ROAD NETWORK DATABASE
+   - STA_Tamer.csv      : validated mainline alignment
+   - Corridor_Tamer.csv : RAMP / GATE / ACCESS
 ========================================================= */
-function parseCSV(text){
+function parseAlignmentCSV(text){
   const rows=text.split(/\r?\n/);
   const out=[];
 
@@ -1211,25 +1309,114 @@ function parseCSV(text){
   return out;
 }
 
-async function loadDatabase(){
-  try{
-    const r=await fetch("./STA_Tamer.csv");
+function parseCorridorCSV(text){
+  const rows=text.split(/\r?\n/);
+  const out=[];
 
-    if(!r.ok){
-      throw new Error("Database tidak ditemukan");
+  for(let i=1;i<rows.length;i++){
+    const line=rows[i].trim();
+    if(!line) continue;
+
+    const c=line.split(",");
+    if(c.length<8) continue;
+
+    const distanceM=parseFloat(c[5]);
+    const lat=parseFloat(c[6]);
+    const lon=parseFloat(c[7]);
+
+    if([distanceM,lat,lon].some(Number.isNaN)){
+      continue;
     }
 
-    staData=parseCSV(await r.text());
+    out.push({
+      corridorId:c[0].trim(),
+      location:c[1].trim(),
+      type:c[2].trim().toUpperCase(),
+      direction:c[3].trim(),
+      movement:c[4].trim().toUpperCase(),
+      distanceM,
+      lat,
+      lon
+    });
+  }
+
+  return out;
+}
+
+function corridorGridKey(lat,lon){
+  const y=Math.floor(lat/CORRIDOR_GRID_SIZE);
+  const x=Math.floor(lon/CORRIDOR_GRID_SIZE);
+  return `${y}:${x}`;
+}
+
+function buildCorridorIndexes(){
+  corridorGrid=new Map();
+  corridorGroups=new Map();
+
+  corridorData.forEach((point,index)=>{
+    const key=corridorGridKey(
+      point.lat,
+      point.lon
+    );
+
+    if(!corridorGrid.has(key)){
+      corridorGrid.set(key,[]);
+    }
+
+    corridorGrid.get(key).push(index);
+
+    if(!corridorGroups.has(point.corridorId)){
+      corridorGroups.set(point.corridorId,[]);
+    }
+
+    corridorGroups
+      .get(point.corridorId)
+      .push(index);
+  });
+}
+
+async function loadDatabase(){
+  try{
+    const [staResponse,corridorResponse]=
+      await Promise.all([
+        fetch("./STA_Tamer.csv"),
+        fetch("./Corridor_Tamer.csv")
+      ]);
+
+    if(!staResponse.ok){
+      throw new Error("STA_Tamer.csv tidak ditemukan");
+    }
+
+    if(!corridorResponse.ok){
+      throw new Error("Corridor_Tamer.csv tidak ditemukan");
+    }
+
+    staData=
+      parseAlignmentCSV(
+        await staResponse.text()
+      );
+
+    corridorData=
+      parseCorridorCSV(
+        await corridorResponse.text()
+      );
+
+    buildCorridorIndexes();
 
     toast(
-      "Database Alignment siap: " +
+      "Road Network siap: " +
       staData.length.toLocaleString("id-ID") +
-      " titik"
+      " mainline + " +
+      corridorData.length.toLocaleString("id-ID") +
+      " corridor"
     );
   }catch(e){
+    console.error(e);
     state.status="DATABASE ERROR";
     render();
-    toast("STA_Tamer.csv tidak ditemukan.");
+    toast(
+      "Database Road Network tidak lengkap."
+    );
   }
 }
 
@@ -1290,6 +1477,457 @@ function nearest(lat,lon){
     idx:best,
     dist:min
   };
+}
+
+/* =========================================================
+   CORRIDOR MATCHING
+========================================================= */
+function nearestCorridor(lat,lon){
+  if(!corridorData.length){
+    return {
+      idx:-1,
+      dist:Infinity,
+      point:null
+    };
+  }
+
+  const centerY=
+    Math.floor(lat/CORRIDOR_GRID_SIZE);
+
+  const centerX=
+    Math.floor(lon/CORRIDOR_GRID_SIZE);
+
+  let bestIdx=-1;
+  let min=Infinity;
+
+  for(let dy=-1;dy<=1;dy++){
+    for(let dx=-1;dx<=1;dx++){
+      const key=
+        `${centerY+dy}:${centerX+dx}`;
+
+      const bucket=
+        corridorGrid.get(key);
+
+      if(!bucket) continue;
+
+      for(const idx of bucket){
+        const p=corridorData[idx];
+
+        const d=distance(
+          lat,lon,
+          p.lat,p.lon
+        );
+
+        if(d<min){
+          min=d;
+          bestIdx=idx;
+        }
+      }
+    }
+  }
+
+  /*
+    Grid should cover the operational threshold.
+    A full fallback protects against an unexpected empty cell.
+  */
+  if(bestIdx<0){
+    for(let i=0;i<corridorData.length;i++){
+      const p=corridorData[i];
+
+      const d=distance(
+        lat,lon,
+        p.lat,p.lon
+      );
+
+      if(d<min){
+        min=d;
+        bestIdx=i;
+      }
+    }
+  }
+
+  return {
+    idx:bestIdx,
+    dist:min,
+    point:
+      bestIdx>=0
+        ? corridorData[bestIdx]
+        : null
+  };
+}
+
+function nearestInCorridor(
+  corridorId,
+  lat,
+  lon
+){
+  const indexes=
+    corridorGroups.get(corridorId);
+
+  if(
+    !indexes ||
+    indexes.length===0
+  ){
+    return {
+      idx:-1,
+      dist:Infinity,
+      point:null
+    };
+  }
+
+  let bestIdx=-1;
+  let min=Infinity;
+
+  for(const idx of indexes){
+    const p=corridorData[idx];
+
+    const d=distance(
+      lat,lon,
+      p.lat,p.lon
+    );
+
+    if(d<min){
+      min=d;
+      bestIdx=idx;
+    }
+  }
+
+  return {
+    idx:bestIdx,
+    dist:min,
+    point:
+      bestIdx>=0
+        ? corridorData[bestIdx]
+        : null
+  };
+}
+
+function makeMainlineCandidate(match){
+  if(
+    !match ||
+    match.idx<0 ||
+    match.dist>MAX_OFFSET
+  ){
+    return null;
+  }
+
+  return {
+    key:"MAINLINE",
+    type:"MAINLINE",
+    dist:match.dist,
+    match
+  };
+}
+
+function makeCorridorCandidate(match){
+  if(
+    !match ||
+    !match.point ||
+    match.dist>CORRIDOR_MAX_OFFSET
+  ){
+    return null;
+  }
+
+  return {
+    key:match.point.corridorId,
+    type:match.point.type,
+    dist:match.dist,
+    match
+  };
+}
+
+function resetNetworkPending(){
+  pendingNetworkKey=null;
+  pendingNetworkCount=0;
+}
+
+function activateNetwork(candidate){
+  if(!candidate){
+    activeNetworkKey=null;
+    resetNetworkPending();
+    return;
+  }
+
+  activeNetworkKey=candidate.key;
+  resetNetworkPending();
+}
+
+function resolveNetwork(
+  lat,
+  lon,
+  mainMatch,
+  globalCorridorMatch
+){
+  const mainCandidate=
+    makeMainlineCandidate(mainMatch);
+
+  const corridorCandidate=
+    makeCorridorCandidate(
+      globalCorridorMatch
+    );
+
+  /*
+    No active network yet:
+    lock immediately onto the closest valid candidate.
+  */
+  if(!activeNetworkKey){
+    const candidates=
+      [mainCandidate,corridorCandidate]
+        .filter(Boolean)
+        .sort((a,b)=>a.dist-b.dist);
+
+    if(!candidates.length){
+      return null;
+    }
+
+    activateNetwork(candidates[0]);
+    return candidates[0];
+  }
+
+  /*
+    Calculate distance to CURRENT network, not only global nearest.
+    This prevents flicker at intersections / shared endpoints.
+  */
+  let activeCandidate=null;
+
+  if(activeNetworkKey==="MAINLINE"){
+    activeCandidate=
+      makeMainlineCandidate(mainMatch);
+  }else{
+    const activeMatch=
+      nearestInCorridor(
+        activeNetworkKey,
+        lat,
+        lon
+      );
+
+    activeCandidate=
+      makeCorridorCandidate(
+        activeMatch
+      );
+  }
+
+  /*
+    If current network is no longer inside the operational offset,
+    move immediately to the closest valid alternative.
+  */
+  if(!activeCandidate){
+    const candidates=
+      [mainCandidate,corridorCandidate]
+        .filter(Boolean)
+        .sort((a,b)=>a.dist-b.dist);
+
+    if(!candidates.length){
+      activateNetwork(null);
+      return null;
+    }
+
+    activateNetwork(candidates[0]);
+    return candidates[0];
+  }
+
+  /*
+    Find the best alternative network.
+  */
+  const alternatives=[];
+
+  if(
+    mainCandidate &&
+    mainCandidate.key!==activeCandidate.key
+  ){
+    alternatives.push(mainCandidate);
+  }
+
+  if(
+    corridorCandidate &&
+    corridorCandidate.key!==activeCandidate.key
+  ){
+    alternatives.push(corridorCandidate);
+  }
+
+  alternatives.sort(
+    (a,b)=>a.dist-b.dist
+  );
+
+  const bestAlternative=
+    alternatives[0] || null;
+
+  /*
+    Switch only when the alternative is meaningfully closer
+    and stays consistent for multiple GPS fixes.
+  */
+  if(
+    bestAlternative &&
+    bestAlternative.dist +
+      NETWORK_SWITCH_ADVANTAGE_M <
+      activeCandidate.dist
+  ){
+    if(
+      pendingNetworkKey===
+      bestAlternative.key
+    ){
+      pendingNetworkCount++;
+    }else{
+      pendingNetworkKey=
+        bestAlternative.key;
+
+      pendingNetworkCount=1;
+    }
+
+    if(
+      pendingNetworkCount>=
+      NETWORK_CONFIRM_FIXES
+    ){
+      activateNetwork(
+        bestAlternative
+      );
+
+      return bestAlternative;
+    }
+  }else{
+    resetNetworkPending();
+  }
+
+  return activeCandidate;
+}
+
+function applyMainlineMatch(candidate){
+  const p=
+    staData[
+      candidate.match.idx
+    ];
+
+  const previousDirection=
+    (
+      state.corridorDirection==="A" ||
+      state.corridorDirection==="B"
+    )
+      ? state.corridorDirection
+      : null;
+
+  state.networkType="MAINLINE";
+  state.networkKey="MAINLINE";
+
+  state.corridorId=null;
+  state.location=null;
+  state.corridorDirection=null;
+  state.corridorMovement=null;
+  state.corridorDistance=null;
+
+  state.offset=
+    candidate.dist;
+
+  state.staText=
+    formatSTA(p.sta);
+
+  state.segment=
+    p.segment;
+
+  staHistory.push(p.sta);
+
+  if(
+    staHistory.length>
+    HISTORY_SIZE
+  ){
+    staHistory.shift();
+  }
+
+  /*
+    An ON/OFF ramp with A/B direction can seed the mainline
+    lane while trend voting starts collecting new fixes.
+  */
+  if(
+    previousDirection &&
+    !lockedLane
+  ){
+    lockedLane=
+      previousDirection;
+  }
+
+  detectLane();
+
+  state.lane=
+    lockedLane ||
+    previousDirection ||
+    "--";
+
+  state.status=
+    "READY · MAINLINE";
+}
+
+function applyCorridorMatch(candidate){
+  const p=
+    candidate.match.point;
+
+  const switchingFromMainline=
+    state.networkType==="MAINLINE";
+
+  state.networkType=
+    p.type;
+
+  state.networkKey=
+    p.corridorId;
+
+  state.corridorId=
+    p.corridorId;
+
+  state.location=
+    p.location;
+
+  state.corridorDirection=
+    p.direction;
+
+  state.corridorMovement=
+    p.movement;
+
+  state.corridorDistance=
+    p.distanceM;
+
+  state.offset=
+    candidate.dist;
+
+  state.staText="--+---";
+  state.segment=p.location;
+
+  if(
+    p.direction==="A" ||
+    p.direction==="B"
+  ){
+    state.lane=
+      p.direction;
+  }else{
+    state.lane="--";
+  }
+
+  if(switchingFromMainline){
+    staHistory=[];
+    pendingLane=null;
+    laneConfirm=0;
+  }
+
+  state.status=
+    "READY · " +
+    p.type;
+}
+
+function applyOutsideNetwork(){
+  activeNetworkKey=null;
+  resetNetworkPending();
+
+  state.networkType=null;
+  state.networkKey=null;
+
+  state.corridorId=null;
+  state.location=null;
+  state.corridorDirection=null;
+  state.corridorMovement=null;
+  state.corridorDistance=null;
+
+  state.offset=null;
+  state.staText="--+---";
+  state.segment="Di luar Road Network";
+  state.lane="--";
+  state.status="OUTSIDE NETWORK";
 }
 
 /* =========================================================
@@ -1378,53 +2016,64 @@ function updatePosition(pos){
       Number.isNaN(pos.coords.speed)
     )
       ? 0
-      : Math.max(0,pos.coords.speed*3.6);
+      : Math.max(
+          0,
+          pos.coords.speed*3.6
+        );
 
-  if(!staData.length){
+  if(
+    !staData.length ||
+    !corridorData.length
+  ){
     state.status="DATABASE WAIT";
     render();
     return;
   }
 
-  if(state.accuracy>MAX_GPS_ACCURACY){
+  if(
+    state.accuracy>
+    MAX_GPS_ACCURACY
+  ){
     state.status="GPS LOW";
     render();
     return;
   }
 
-  const n=nearest(
-    state.lat,
-    state.lon
-  );
+  const mainMatch=
+    nearest(
+      state.lat,
+      state.lon
+    );
 
-  state.offset=n.dist;
+  const corridorMatch=
+    nearestCorridor(
+      state.lat,
+      state.lon
+    );
 
-  if(n.dist>MAX_OFFSET){
-    state.status="OFF ROUTE";
-    state.staText="--+---";
-    state.segment="Di luar koridor alignment";
+  const chosen=
+    resolveNetwork(
+      state.lat,
+      state.lon,
+      mainMatch,
+      corridorMatch
+    );
+
+  if(!chosen){
+    applyOutsideNetwork();
     render();
     return;
   }
 
-  const p=staData[n.idx];
-
-  state.staText=formatSTA(p.sta);
-  state.segment=p.segment;
-
-  staHistory.push(p.sta);
-
-  if(staHistory.length>HISTORY_SIZE){
-    staHistory.shift();
+  if(chosen.type==="MAINLINE"){
+    applyMainlineMatch(
+      chosen
+    );
+  }else{
+    applyCorridorMatch(
+      chosen
+    );
   }
-
-  detectLane();
-
-  state.lane=
-    lockedLane ||
-    "--";
-
-  state.status="GPS READY";
 
   render();
 }
@@ -1454,15 +2103,114 @@ function startGPS(){
 /* =========================================================
    RENDER PREVIEW
 ========================================================= */
+function corridorSecondaryText(){
+  if(
+    !state.networkType ||
+    state.networkType==="MAINLINE"
+  ){
+    return "";
+  }
+
+  const parts=[
+    state.networkType
+  ];
+
+  if(
+    state.corridorDirection &&
+    state.corridorDirection!=="-"
+  ){
+    parts.push(
+      state.corridorDirection
+    );
+  }
+
+  /*
+    RAMP movement belongs on the same line:
+    RAMP B OFF
+  */
+  if(
+    state.networkType==="RAMP" &&
+    state.corridorMovement
+  ){
+    parts.push(
+      state.corridorMovement
+    );
+  }
+
+  return parts.join(" ");
+}
+
+function corridorTertiaryText(){
+  if(state.networkType==="RAMP"){
+    return Number.isFinite(
+      state.corridorDistance
+    )
+      ? `+${Math.round(state.corridorDistance)} m`
+      : "-- m";
+  }
+
+  if(
+    state.networkType==="GATE" ||
+    state.networkType==="ACCESS"
+  ){
+    return (
+      state.corridorMovement ||
+      ""
+    );
+  }
+
+  return "";
+}
+
 function render(){
-  $("staValue").textContent=
-    state.staText;
+  const topInfo=
+    $("topInfo");
 
-  $("laneValue").textContent=
-    state.lane;
+  if(state.networkType==="MAINLINE"){
+    topInfo.classList.remove(
+      "corridor-mode"
+    );
 
-  $("segmentValue").textContent=
-    state.segment;
+    $("staValue").textContent=
+      `STA ${state.staText}`;
+
+    $("topRowValue").textContent=
+      `JALUR ${state.lane}`;
+
+    $("segmentValue").textContent=
+      `Segmen ${state.segment}`;
+  }else if(
+    state.networkType==="RAMP" ||
+    state.networkType==="GATE" ||
+    state.networkType==="ACCESS"
+  ){
+    topInfo.classList.add(
+      "corridor-mode"
+    );
+
+    $("staValue").textContent=
+      state.location ||
+      state.networkType;
+
+    $("topRowValue").textContent=
+      corridorSecondaryText();
+
+    $("segmentValue").textContent=
+      corridorTertiaryText();
+  }else{
+    topInfo.classList.remove(
+      "corridor-mode"
+    );
+
+    $("staValue").textContent=
+      "LOKASI --";
+
+    $("topRowValue").textContent=
+      "--";
+
+    $("segmentValue").textContent=
+      state.segment;
+  }
 
   $("coordValue").textContent=
     (
@@ -1485,16 +2233,23 @@ function render(){
   $("systemValue").textContent=
     state.status;
 
-  const status=$("systemValue");
-  const dot=$("gpsDot");
-  const label=$("gpsLabel");
+  const status=
+    $("systemValue");
+
+  const dot=
+    $("gpsDot");
+
+  const label=
+    $("gpsLabel");
 
   const isReady=
-    state.status==="GPS READY";
+    isReadyStatus(
+      state.status
+    );
 
   const isBad=
     (
-      state.status==="OFF ROUTE" ||
+      state.status==="OUTSIDE NETWORK" ||
       state.status==="DATABASE ERROR"
     );
 
@@ -1526,9 +2281,9 @@ function render(){
     state.status;
 
   /*
-    Rebuild overlay only when GPS/STA/UI data changes.
+    Rebuild overlay only when GPS/network/UI data changes.
   */
-  overlayDirty = true;
+  overlayDirty=true;
 }
 
 /* =========================================================
@@ -1979,36 +2734,122 @@ function drawWatermarks(
   }
 
   /* -------------------------
-     KANAN ATAS - COMPACT
-     Lebar panel mengikuti visual STA, bukan % lebar frame.
+     KANAN ATAS - ROAD FIRST
+     MAINLINE:
+       STA 56+350
+       JALUR A
+       Segmen Bitung - Cikupa
+
+     CORRIDOR:
+       BITUNG
+       RAMP B OFF
+       +175 m
   ------------------------- */
-  const staFontSize=
+  const isMainline=
+    state.networkType==="MAINLINE";
+
+  const isCorridor=
+    (
+      state.networkType==="RAMP" ||
+      state.networkType==="GATE" ||
+      state.networkType==="ACCESS"
+    );
+
+  let primaryText="LOKASI --";
+  let secondaryText="--";
+  let tertiaryText=state.segment || "";
+
+  let primaryFont=
     Math.round(height*0.052);
 
-  ctx.font=
-    `800 ${staFontSize}px Arial`;
+  let secondaryFont=
+    Math.round(height*0.038);
 
-  const staTextWidth=
-    ctx.measureText(state.staText).width;
+  let tertiaryFont=
+    Math.round(height*0.015);
+
+  if(isMainline){
+    primaryText=
+      `STA ${state.staText}`;
+
+    secondaryText=
+      `JALUR ${state.lane}`;
+
+    tertiaryText=
+      `Segmen ${state.segment}`;
+  }else if(isCorridor){
+    primaryText=
+      state.location ||
+      state.networkType;
+
+    secondaryText=
+      corridorSecondaryText();
+
+    tertiaryText=
+      corridorTertiaryText();
+
+    primaryFont=
+      Math.round(height*0.046);
+
+    secondaryFont=
+      Math.round(height*0.030);
+
+    tertiaryFont=
+      Math.round(height*0.021);
+  }
 
   const topInnerPad=
-    Math.round(height*0.022);
+    Math.round(height*0.021);
 
-  /*
-    Sedikit ruang ekstra untuk Jalur/Segmen, tetapi tetap
-    terasa selebar STA, bukan panel panjang.
-  */
+  const maxPanelW=
+    Math.round(width*0.30);
+
+  ctx.font=
+    `900 ${primaryFont}px Arial`;
+
+  const primaryWidth=
+    ctx.measureText(primaryText).width;
+
+  ctx.font=
+    `900 ${secondaryFont}px Arial`;
+
+  const secondaryWidth=
+    ctx.measureText(secondaryText).width;
+
+  ctx.font=
+    `800 ${tertiaryFont}px Arial`;
+
+  const tertiaryWidth=
+    ctx.measureText(tertiaryText).width;
+
+  const widestText=
+    Math.max(
+      primaryWidth,
+      secondaryWidth,
+      tertiaryWidth
+    );
+
   const topW=
     Math.max(
       Math.round(width*0.155),
       Math.min(
-        Math.round(width*0.225),
-        Math.round(staTextWidth + topInnerPad*2.2)
+        maxPanelW,
+        Math.round(
+          widestText +
+          topInnerPad*2
+        )
       )
     );
 
   const topH=
-    Math.round(height*0.150);
+    Math.round(
+      height*
+      (
+        isCorridor
+          ? 0.145
+          : 0.153
+      )
+    );
 
   const topX=
     width-pad-topW;
@@ -2026,55 +2867,84 @@ function drawWatermarks(
     topH
   );
 
-  drawText(
-    ctx,
-    "LOKASI STA",
-    topX+topW-topInnerPad,
-    topY+Math.round(height*0.010),
-    Math.round(height*0.014),
-    false,
-    "right",
-    "#c4c9ce"
-  );
+  const availableW=
+    topW-topInnerPad*2;
+
+  ctx.font=
+    `900 ${primaryFont}px Arial`;
+
+  const fittedPrimary=
+    fitText(
+      ctx,
+      primaryText,
+      availableW
+    );
 
   drawText(
     ctx,
-    state.staText,
+    fittedPrimary,
     topX+topW-topInnerPad,
-    topY+Math.round(height*0.032),
-    staFontSize,
-    true,
-    "right"
-  );
-
-  drawText(
-    ctx,
-    `Jalur ${state.lane}`,
-    topX+topW-topInnerPad,
-    topY+Math.round(height*0.091),
-    Math.round(height*0.019),
+    topY+Math.round(height*0.017),
+    primaryFont,
     true,
     "right"
   );
 
   ctx.font=
-    `500 ${Math.round(height*0.0135)}px Arial`;
+    `900 ${secondaryFont}px Arial`;
 
-  const segment=
+  const fittedSecondary=
     fitText(
       ctx,
-      state.segment,
-      topW-topInnerPad*2
+      secondaryText,
+      availableW
     );
 
   drawText(
     ctx,
-    segment,
+    fittedSecondary,
     topX+topW-topInnerPad,
-    topY+Math.round(height*0.119),
-    Math.round(height*0.0135),
-    false,
+    topY+
+      Math.round(
+        height*
+        (
+          isCorridor
+            ? 0.073
+            : 0.078
+        )
+      ),
+    secondaryFont,
+    true,
     "right"
+  );
+
+  ctx.font=
+    `800 ${tertiaryFont}px Arial`;
+
+  const fittedTertiary=
+    fitText(
+      ctx,
+      tertiaryText,
+      availableW
+    );
+
+  drawText(
+    ctx,
+    fittedTertiary,
+    topX+topW-topInnerPad,
+    topY+
+      Math.round(
+        height*
+        (
+          isCorridor
+            ? 0.111
+            : 0.124
+        )
+      ),
+    tertiaryFont,
+    isCorridor,
+    "right",
+    "#eef1f4"
   );
 
   /* -------------------------
@@ -2200,10 +3070,10 @@ function drawWatermarks(
     let valueColor="#fff";
 
     if(item[0].trim()==="Status"){
-      if(state.status==="GPS READY"){
+      if(isReadyStatus(state.status)){
         valueColor="#34c77b";
       }else if(
-        state.status==="OFF ROUTE" ||
+        state.status==="OUTSIDE NETWORK" ||
         state.status==="DATABASE ERROR"
       ){
         valueColor="#ff5f5f";
@@ -2421,9 +3291,9 @@ function canStartCapture(){
     return false;
   }
 
-  if(state.status!=="GPS READY"){
+  if(!isReadyStatus(state.status)){
     toast(
-      "Tunggu Status Sistem: GPS READY."
+      "Tunggu Status Sistem sampai READY."
     );
     return false;
   }
@@ -2480,7 +3350,7 @@ async function capturePhoto(){
         url;
 
       a.download=
-        `CMMGeoCam_STA_${safeSTAForFilename()}_${filenameTimestamp()}.jpg`;
+        `CMMGeoCam_${currentContextForFilename()}_${filenameTimestamp()}.jpg`;
 
       a.click();
 
@@ -2663,6 +3533,9 @@ async function startVideoRecording(){
 
   recordedChunks=[];
 
+  recordingContextForFilename=
+    currentContextForFilename();
+
   mediaRecorder.ondataavailable=
     event=>{
       if(
@@ -2709,7 +3582,7 @@ async function startVideoRecording(){
       a.href=url;
 
       a.download=
-        `CMMGeoCam_VIDEO_STA_${safeSTAForFilename()}_${filenameTimestamp()}.${extension}`;
+        `CMMGeoCam_VIDEO_${recordingContextForFilename}_${filenameTimestamp()}.${extension}`;
 
       /*
         Local-only download.
@@ -2736,6 +3609,7 @@ async function startVideoRecording(){
       videoCanvasTrack=null;
       videoUsesManualFrames=false;
       recorderUsesSingleFinalBlob=false;
+      recordingContextForFilename="LOCATION";
 
       toast(
         isMp4

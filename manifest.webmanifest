@@ -1,7 +1,7 @@
 {
   "name": "CMM GeoCam",
   "short_name": "CMM GeoCam",
-  "description": "Geo-Referenced Visual Inspection berbasis GPS dan Database Alignment",
+  "description": "Geo-Referenced Visual Inspection berbasis GPS, Database Alignment, dan Multi-Corridor Road Network",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

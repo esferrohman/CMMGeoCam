@@ -1,10 +1,11 @@
-const CACHE_NAME = "cmm-geocam-v12-1-mp4-seek-fix";
+const CACHE_NAME = "cmm-geocam-v12-2-multi-corridor";
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./STA_Tamer.csv",
+  "./Corridor_Tamer.csv",
   "./icon-192.png",
   "./icon-512.png",
   "./logo-mms.png"
