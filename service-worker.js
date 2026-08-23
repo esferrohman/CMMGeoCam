@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v12-gyro-eis";
+const CACHE_NAME = "cmm-geocam-v12-1-mp4-seek-fix";
 
 const APP_SHELL = [
   "./",

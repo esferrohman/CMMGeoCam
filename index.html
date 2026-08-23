@@ -558,6 +558,7 @@ let recordedChunks = [];
 let recordingAnimation = null;
 let recordingTimer = null;
 let recordingStartedAt = 0;
+let recorderUsesSingleFinalBlob = false;
 
 /*
    Prototype 12 video profile.
@@ -2734,6 +2735,7 @@ async function startVideoRecording(){
 
       videoCanvasTrack=null;
       videoUsesManualFrames=false;
+      recorderUsesSingleFinalBlob=false;
 
       toast(
         isMp4
@@ -2742,10 +2744,45 @@ async function startVideoRecording(){
       );
     };
 
+  mediaRecorder.onerror=
+    event=>{
+      console.error(
+        "MediaRecorder error:",
+        event.error || event
+      );
+
+      toast(
+        "Terjadi error pada perekaman video."
+      );
+    };
+
   /*
-    1 second chunks: lower JS event overhead.
+    MP4 COMPATIBILITY MODE
+    ----------------------
+    Some Android/browser combinations can produce an MP4 that plays
+    sequentially but exposes an incorrect duration / seek index when
+    periodic MediaRecorder blobs are used.
+
+    MP4 is therefore recorded as one final Blob and finalized only
+    when stop() is called.
+
+    WEBM keeps the 1-second timeslice.
   */
-  mediaRecorder.start(1000);
+  const recorderMime=
+    (
+      mediaRecorder.mimeType ||
+      videoFormat.mime ||
+      ""
+    ).toLowerCase();
+
+  recorderUsesSingleFinalBlob=
+    recorderMime.includes("mp4");
+
+  if(recorderUsesSingleFinalBlob){
+    mediaRecorder.start();
+  }else{
+    mediaRecorder.start(1000);
+  }
 
   recordingStartedAt=
     Date.now();
@@ -2794,6 +2831,11 @@ async function startVideoRecording(){
     ) +
     " · " +
     videoFormat.label +
+    (
+      recorderUsesSingleFinalBlob
+        ? " · seek-safe finalize"
+        : " · chunked"
+    ) +
     " · " +
     stabilizerMode +
     " · Logo MMS aktif"
