@@ -561,7 +561,6 @@ const MAX_OFFSET = 45;
 const CORRIDOR_MAX_OFFSET = 45;
 
 const HISTORY_SIZE = 7;
-const NEIGHBOR_CHECK = 8;
 const MIN_DIRECTION_DELTA = 10;
 
 /*
@@ -573,14 +572,19 @@ const NETWORK_SWITCH_ADVANTAGE_M = 7;
 const NETWORK_CONFIRM_FIXES = 3;
 
 /*
-  Spatial grid for Corridor_Tamer.csv.
+  ONE spatial-grid method for BOTH:
+  - validated mainline alignment
+  - supplementary corridor network
+
   0.0015 degree is roughly 166 m latitude.
-  We inspect the surrounding 3x3 cells.
+  Search uses the surrounding 3x3 cells.
 */
-const CORRIDOR_GRID_SIZE = 0.0015;
+const NETWORK_GRID_SIZE = 0.0015;
 
 let staData = [];
 let corridorData = [];
+
+let staGrid = new Map();
 let corridorGrid = new Map();
 let corridorGroups = new Map();
 
@@ -605,7 +609,26 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-   Prototype 12 video profile.
+  Prototype 12.3 rolling-finalized recording.
+
+  The UI remains one continuous REC session, but MediaRecorder
+  finalizes a separate file every 2 minutes. This bounds memory and
+  gives every MP4 its own container finalization / seek metadata.
+*/
+const VIDEO_SEGMENT_MS = 120000;
+
+let recordingSessionActive = false;
+let recordingCanvasStream = null;
+let recordingVideoFormat = null;
+
+let recordingSegmentTimer = null;
+let recordingSegmentIndex = 0;
+let recordingSegmentStartedAt = 0;
+let recordingSegmentStartContext = "LOCATION";
+let recordingSegmentStartStamp = "";
+
+/*
+   Prototype 12.3 video profile.
    Higher camera input is requested as overscan workspace.
    Recording output remains 1280x720.
 */
@@ -789,6 +812,33 @@ function filenameTimestamp(){
   const ss=String(d.getSeconds()).padStart(2,"0");
   return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
 }
+
+function filenameTimestampFromDate(date){
+  const y=date.getFullYear();
+
+  const mo=
+    String(date.getMonth()+1)
+      .padStart(2,"0");
+
+  const d=
+    String(date.getDate())
+      .padStart(2,"0");
+
+  const h=
+    String(date.getHours())
+      .padStart(2,"0");
+
+  const mi=
+    String(date.getMinutes())
+      .padStart(2,"0");
+
+  const s=
+    String(date.getSeconds())
+      .padStart(2,"0");
+
+  return `${y}${mo}${d}_${h}${mi}${s}`;
+}
+
 
 function safeToken(value){
   return String(value || "")
@@ -1343,30 +1393,56 @@ function parseCorridorCSV(text){
   return out;
 }
 
-function corridorGridKey(lat,lon){
-  const y=Math.floor(lat/CORRIDOR_GRID_SIZE);
-  const x=Math.floor(lon/CORRIDOR_GRID_SIZE);
+function networkGridKey(lat,lon){
+  const y=Math.floor(lat/NETWORK_GRID_SIZE);
+  const x=Math.floor(lon/NETWORK_GRID_SIZE);
   return `${y}:${x}`;
 }
 
-function buildCorridorIndexes(){
-  corridorGrid=new Map();
-  corridorGroups=new Map();
+function buildSpatialGrid(data){
+  const grid=new Map();
 
-  corridorData.forEach((point,index)=>{
-    const key=corridorGridKey(
-      point.lat,
-      point.lon
-    );
+  data.forEach((point,index)=>{
+    const key=
+      networkGridKey(
+        point.lat,
+        point.lon
+      );
 
-    if(!corridorGrid.has(key)){
-      corridorGrid.set(key,[]);
+    if(!grid.has(key)){
+      grid.set(key,[]);
     }
 
-    corridorGrid.get(key).push(index);
+    grid.get(key).push(index);
+  });
 
-    if(!corridorGroups.has(point.corridorId)){
-      corridorGroups.set(point.corridorId,[]);
+  return grid;
+}
+
+function buildNetworkIndexes(){
+  staGrid=
+    buildSpatialGrid(
+      staData
+    );
+
+  corridorGrid=
+    buildSpatialGrid(
+      corridorData
+    );
+
+  corridorGroups=
+    new Map();
+
+  corridorData.forEach((point,index)=>{
+    if(
+      !corridorGroups.has(
+        point.corridorId
+      )
+    ){
+      corridorGroups.set(
+        point.corridorId,
+        []
+      );
     }
 
     corridorGroups
@@ -1401,7 +1477,7 @@ async function loadDatabase(){
         await corridorResponse.text()
       );
 
-    buildCorridorIndexes();
+    buildNetworkIndexes();
 
     toast(
       "Road Network siap: " +
@@ -1423,79 +1499,28 @@ async function loadDatabase(){
 /* =========================================================
    STA MATCHING
 ========================================================= */
-function nearest(lat,lon){
-  if(!staData.length){
-    return {idx:-1,dist:Infinity};
-  }
-
-  let lo=0;
-  let hi=staData.length-1;
-
-  while(hi-lo>1){
-    const mid=(lo+hi)>>1;
-
-    const d1=distance(
-      lat,lon,
-      staData[mid].lat,
-      staData[mid].lon
-    );
-
-    const d2=distance(
-      lat,lon,
-      staData[mid+1].lat,
-      staData[mid+1].lon
-    );
-
-    if(d1<d2){
-      hi=mid;
-    }else{
-      lo=mid+1;
-    }
-  }
-
-  let best=lo;
-  let min=Infinity;
-
-  for(
-    let i=Math.max(0,lo-NEIGHBOR_CHECK);
-    i<=Math.min(staData.length-1,lo+NEIGHBOR_CHECK);
-    i++
-  ){
-    const d=distance(
-      lat,lon,
-      staData[i].lat,
-      staData[i].lon
-    );
-
-    if(d<min){
-      min=d;
-      best=i;
-    }
-  }
-
-  return {
-    idx:best,
-    dist:min
-  };
-}
-
-/* =========================================================
-   CORRIDOR MATCHING
-========================================================= */
-function nearestCorridor(lat,lon){
-  if(!corridorData.length){
+function nearestFromGrid(
+  data,
+  grid,
+  lat,
+  lon
+){
+  if(!data.length){
     return {
       idx:-1,
-      dist:Infinity,
-      point:null
+      dist:Infinity
     };
   }
 
   const centerY=
-    Math.floor(lat/CORRIDOR_GRID_SIZE);
+    Math.floor(
+      lat/NETWORK_GRID_SIZE
+    );
 
   const centerX=
-    Math.floor(lon/CORRIDOR_GRID_SIZE);
+    Math.floor(
+      lon/NETWORK_GRID_SIZE
+    );
 
   let bestIdx=-1;
   let min=Infinity;
@@ -1506,12 +1531,12 @@ function nearestCorridor(lat,lon){
         `${centerY+dy}:${centerX+dx}`;
 
       const bucket=
-        corridorGrid.get(key);
+        grid.get(key);
 
       if(!bucket) continue;
 
       for(const idx of bucket){
-        const p=corridorData[idx];
+        const p=data[idx];
 
         const d=distance(
           lat,lon,
@@ -1527,12 +1552,12 @@ function nearestCorridor(lat,lon){
   }
 
   /*
-    Grid should cover the operational threshold.
-    A full fallback protects against an unexpected empty cell.
+    Operationally a valid point should exist in the local grid.
+    Full-scan fallback is only a safety net for an unexpected gap.
   */
   if(bestIdx<0){
-    for(let i=0;i<corridorData.length;i++){
-      const p=corridorData[i];
+    for(let i=0;i<data.length;i++){
+      const p=data[i];
 
       const d=distance(
         lat,lon,
@@ -1548,10 +1573,39 @@ function nearestCorridor(lat,lon){
 
   return {
     idx:bestIdx,
-    dist:min,
+    dist:min
+  };
+}
+
+/*
+  Mainline now uses the exact same spatial-index strategy
+  as the corridor network. No binary-search / unimodal-distance
+  assumption remains.
+*/
+function nearest(lat,lon){
+  return nearestFromGrid(
+    staData,
+    staGrid,
+    lat,
+    lon
+  );
+}
+
+function nearestCorridor(lat,lon){
+  const match=
+    nearestFromGrid(
+      corridorData,
+      corridorGrid,
+      lat,
+      lon
+    );
+
+  return {
+    idx:match.idx,
+    dist:match.dist,
     point:
-      bestIdx>=0
-        ? corridorData[bestIdx]
+      match.idx>=0
+        ? corridorData[match.idx]
         : null
   };
 }
@@ -2479,10 +2533,7 @@ async function startCamera(){
    FOTO / VIDEO MODE
 ========================================================= */
 function isRecording(){
-  return (
-    mediaRecorder &&
-    mediaRecorder.state==="recording"
-  );
+  return recordingSessionActive;
 }
 
 function setCaptureMode(mode){
@@ -3452,89 +3503,207 @@ function updateRecordingTimer(){
     String(second).padStart(2,"0");
 }
 
-async function startVideoRecording(){
-  if(!canStartCapture()){
-    return;
-  }
+function clearRecordingSegmentTimer(){
+  if(recordingSegmentTimer){
+    clearTimeout(
+      recordingSegmentTimer
+    );
 
-  const logoOK=
-    await ensureWatermarkLogo();
-
-  if(!logoOK){
-    toast("Logo MMS belum siap. Coba mulai video lagi.");
-    return;
+    recordingSegmentTimer=null;
   }
+}
+
+function cleanupRecordingSession(){
+  clearRecordingSegmentTimer();
+
+  clearInterval(
+    recordingTimer
+  );
+
+  recordingTimer=null;
+
+  stopVideoFrameLoop();
 
   if(
-    !window.MediaRecorder ||
-    !$("videoCanvas").captureStream
+    recordingCanvasStream &&
+    recordingCanvasStream.getTracks
   ){
-    toast(
-      "Browser ini belum mendukung perekaman video watermark."
+    recordingCanvasStream
+      .getTracks()
+      .forEach(
+        track=>track.stop()
+      );
+  }
+
+  recordingCanvasStream=null;
+  recordingVideoFormat=null;
+
+  videoCanvasTrack=null;
+  videoUsesManualFrames=false;
+
+  recorderUsesSingleFinalBlob=false;
+  recordingContextForFilename="LOCATION";
+
+  $("recBadge").classList.remove(
+    "show"
+  );
+
+  $("shutter").classList.remove(
+    "recording"
+  );
+
+  $("recTimer").textContent=
+    "00:00";
+
+  $("shutter").setAttribute(
+    "aria-label",
+    "Mulai video"
+  );
+}
+
+function downloadFinalizedSegment(
+  blob,
+  actualMime,
+  segmentIndex,
+  startContext,
+  endContext,
+  startStamp
+){
+  const isMp4=
+    actualMime
+      .toLowerCase()
+      .includes("mp4");
+
+  const extension=
+    isMp4
+      ? "mp4"
+      : "webm";
+
+  const safeStart=
+    safeToken(
+      startContext
+    ) || "LOCATION";
+
+  const safeEnd=
+    safeToken(
+      endContext
+    ) || "LOCATION";
+
+  const segmentNo=
+    String(segmentIndex)
+      .padStart(3,"0");
+
+  const url=
+    URL.createObjectURL(
+      blob
     );
+
+  const a=
+    document.createElement("a");
+
+  a.href=url;
+
+  /*
+    Segment filename captures the location context at BOTH
+    boundaries. Useful when a 2-minute segment crosses
+    MAINLINE -> RAMP -> GATE.
+  */
+  a.download=
+    `CMMGeoCam_VIDEO_SEG${segmentNo}_${safeStart}_TO_${safeEnd}_${startStamp}.${extension}`;
+
+  a.click();
+
+  setTimeout(
+    ()=>URL.revokeObjectURL(url),
+    10000
+  );
+}
+
+function scheduleNextRecordingSegment(){
+  clearRecordingSegmentTimer();
+
+  if(!recordingSessionActive){
     return;
   }
 
-  const canvas=$("videoCanvas");
-  canvas.width=VIDEO_WIDTH;
-  canvas.height=VIDEO_HEIGHT;
-
-  overlayDirty=true;
-  rebuildVideoOverlay();
-  compositeVideoFrame();
-
-  /*
-    Prefer manual canvas frames.
-    If requestFrame() isn't available, fall back to fixed 30 fps.
-  */
-  let canvasStream=canvas.captureStream(0);
-  videoCanvasTrack=canvasStream.getVideoTracks()[0] || null;
-
-  videoUsesManualFrames=
-    !!(
-      videoCanvasTrack &&
-      typeof videoCanvasTrack.requestFrame==="function"
+  recordingSegmentTimer=
+    setTimeout(
+      ()=>{
+        if(
+          recordingSessionActive &&
+          mediaRecorder &&
+          mediaRecorder.state==="recording"
+        ){
+          /*
+            Do NOT end the overall REC session.
+            Stop only this MediaRecorder instance so the container
+            is finalized. onstop starts the next segment.
+          */
+          mediaRecorder.stop();
+        }
+      },
+      VIDEO_SEGMENT_MS
     );
+}
 
-  if(!videoUsesManualFrames){
-    canvasStream.getTracks().forEach(
-      track=>track.stop()
-    );
-
-    canvasStream=
-      canvas.captureStream(VIDEO_TARGET_FPS);
-
-    videoCanvasTrack=
-      canvasStream.getVideoTracks()[0] || null;
+function startRecorderSegment(){
+  if(
+    !recordingSessionActive ||
+    !recordingCanvasStream ||
+    !recordingVideoFormat
+  ){
+    return;
   }
 
-  const videoFormat=
-    preferredVideoFormat();
+  recordingSegmentIndex++;
+
+  recordedChunks=[];
+
+  recordingSegmentStartedAt=
+    Date.now();
+
+  const segmentDate=
+    new Date(
+      recordingSegmentStartedAt
+    );
+
+  recordingSegmentStartStamp=
+    filenameTimestampFromDate(
+      segmentDate
+    );
+
+  recordingSegmentStartContext=
+    currentContextForFilename();
 
   try{
     mediaRecorder=
       new MediaRecorder(
-        canvasStream,
-        videoFormat.mime
+        recordingCanvasStream,
+        recordingVideoFormat.mime
           ? {
-              mimeType:videoFormat.mime,
-              videoBitsPerSecond:VIDEO_BITRATE
+              mimeType:
+                recordingVideoFormat.mime,
+
+              videoBitsPerSecond:
+                VIDEO_BITRATE
             }
           : {
-              videoBitsPerSecond:VIDEO_BITRATE
+              videoBitsPerSecond:
+                VIDEO_BITRATE
             }
       );
   }catch(e){
+    console.error(e);
+
+    recordingSessionActive=false;
+    cleanupRecordingSession();
+
     toast(
-      "MediaRecorder video tidak dapat dimulai."
+      "MediaRecorder segment tidak dapat dimulai."
     );
+
     return;
   }
-
-  recordedChunks=[];
-
-  recordingContextForFilename=
-    currentContextForFilename();
 
   mediaRecorder.ondataavailable=
     event=>{
@@ -3548,76 +3717,6 @@ async function startVideoRecording(){
       }
     };
 
-  mediaRecorder.onstop=
-    ()=>{
-      stopVideoFrameLoop();
-
-      const actualMime=
-        mediaRecorder.mimeType ||
-        videoFormat.mime ||
-        "video/webm";
-
-      const isMp4=
-        actualMime
-          .toLowerCase()
-          .includes("mp4");
-
-      const extension=
-        isMp4
-          ? "mp4"
-          : "webm";
-
-      const blob=
-        new Blob(
-          recordedChunks,
-          {type:actualMime}
-        );
-
-      const url=
-        URL.createObjectURL(blob);
-
-      const a=
-        document.createElement("a");
-
-      a.href=url;
-
-      a.download=
-        `CMMGeoCam_VIDEO_${recordingContextForFilename}_${filenameTimestamp()}.${extension}`;
-
-      /*
-        Local-only download.
-        No upload/cloud endpoint is used.
-      */
-      a.click();
-
-      setTimeout(
-        ()=>URL.revokeObjectURL(url),
-        5000
-      );
-
-      if(
-        canvasStream &&
-        canvasStream.getTracks
-      ){
-        canvasStream
-          .getTracks()
-          .forEach(
-            track=>track.stop()
-          );
-      }
-
-      videoCanvasTrack=null;
-      videoUsesManualFrames=false;
-      recorderUsesSingleFinalBlob=false;
-      recordingContextForFilename="LOCATION";
-
-      toast(
-        isMp4
-          ? "Video MP4 tersimpan di perangkat."
-          : "Video disimpan sebagai WEBM."
-      );
-    };
-
   mediaRecorder.onerror=
     event=>{
       console.error(
@@ -3625,41 +3724,189 @@ async function startVideoRecording(){
         event.error || event
       );
 
+      recordingSessionActive=false;
+      cleanupRecordingSession();
+
       toast(
         "Terjadi error pada perekaman video."
       );
     };
 
+  mediaRecorder.onstop=
+    ()=>{
+      clearRecordingSegmentTimer();
+
+      const recorder=
+        mediaRecorder;
+
+      const actualMime=
+        (
+          recorder &&
+          recorder.mimeType
+        ) ||
+        recordingVideoFormat.mime ||
+        "video/webm";
+
+      const blob=
+        new Blob(
+          recordedChunks,
+          {type:actualMime}
+        );
+
+      const segmentEndContext=
+        currentContextForFilename();
+
+      const finishedIndex=
+        recordingSegmentIndex;
+
+      const finishedStartContext=
+        recordingSegmentStartContext;
+
+      const finishedStartStamp=
+        recordingSegmentStartStamp;
+
+      /*
+        Each segment has been STOPPED before download,
+        therefore the browser has had the chance to finalize
+        that segment's container.
+      */
+      if(blob.size>0){
+        downloadFinalizedSegment(
+          blob,
+          actualMime,
+          finishedIndex,
+          finishedStartContext,
+          segmentEndContext,
+          finishedStartStamp
+        );
+      }
+
+      recordedChunks=[];
+
+      if(recordingSessionActive){
+        /*
+          Keep camera/canvas/frame-loop alive.
+          Start the next finalized segment immediately.
+        */
+        setTimeout(
+          ()=>{
+            if(recordingSessionActive){
+              startRecorderSegment();
+            }
+          },
+          30
+        );
+      }else{
+        cleanupRecordingSession();
+
+        toast(
+          "Rekaman selesai. Semua segmen sudah difinalisasi."
+        );
+      }
+    };
+
   /*
-    MP4 COMPATIBILITY MODE
-    ----------------------
-    Some Android/browser combinations can produce an MP4 that plays
-    sequentially but exposes an incorrect duration / seek index when
-    periodic MediaRecorder blobs are used.
-
-    MP4 is therefore recorded as one final Blob and finalized only
-    when stop() is called.
-
-    WEBM keeps the 1-second timeslice.
+    No timeslice for MP4.
+    Every 2-minute segment is finalized by stop(), avoiding the old
+    periodic fragmented-MP4 concatenation problem.
   */
-  const recorderMime=
-    (
-      mediaRecorder.mimeType ||
-      videoFormat.mime ||
-      ""
-    ).toLowerCase();
+  recorderUsesSingleFinalBlob=true;
+  mediaRecorder.start();
 
-  recorderUsesSingleFinalBlob=
-    recorderMime.includes("mp4");
+  scheduleNextRecordingSegment();
 
-  if(recorderUsesSingleFinalBlob){
-    mediaRecorder.start();
-  }else{
-    mediaRecorder.start(1000);
+  toast(
+    `REC segmen ${recordingSegmentIndex} · maksimal 2 menit`
+  );
+}
+
+async function startVideoRecording(){
+  if(!canStartCapture()){
+    return;
   }
+
+  const logoOK=
+    await ensureWatermarkLogo();
+
+  if(!logoOK){
+    toast(
+      "Logo MMS belum siap. Coba mulai video lagi."
+    );
+    return;
+  }
+
+  if(
+    !window.MediaRecorder ||
+    !$("videoCanvas").captureStream
+  ){
+    toast(
+      "Browser ini belum mendukung perekaman video watermark."
+    );
+    return;
+  }
+
+  const canvas=
+    $("videoCanvas");
+
+  canvas.width=
+    VIDEO_WIDTH;
+
+  canvas.height=
+    VIDEO_HEIGHT;
+
+  overlayDirty=true;
+
+  rebuildVideoOverlay();
+  compositeVideoFrame();
+
+  /*
+    One canvas stream stays alive for the whole REC session.
+    Only MediaRecorder instances rotate every 2 minutes.
+  */
+  recordingCanvasStream=
+    canvas.captureStream(0);
+
+  videoCanvasTrack=
+    recordingCanvasStream
+      .getVideoTracks()[0] ||
+    null;
+
+  videoUsesManualFrames=
+    !!(
+      videoCanvasTrack &&
+      typeof videoCanvasTrack.requestFrame===
+        "function"
+    );
+
+  if(!videoUsesManualFrames){
+    recordingCanvasStream
+      .getTracks()
+      .forEach(
+        track=>track.stop()
+      );
+
+    recordingCanvasStream=
+      canvas.captureStream(
+        VIDEO_TARGET_FPS
+      );
+
+    videoCanvasTrack=
+      recordingCanvasStream
+        .getVideoTracks()[0] ||
+      null;
+  }
+
+  recordingVideoFormat=
+    preferredVideoFormat();
+
+  recordingSessionActive=true;
+  recordingSegmentIndex=0;
 
   recordingStartedAt=
     Date.now();
+
+  recordingContextForFilename=
+    currentContextForFilename();
 
   $("recBadge").classList.add(
     "show"
@@ -3683,14 +3930,15 @@ async function startVideoRecording(){
     );
 
   /*
-    Push initial fully-composited frame,
-    then sync to incoming camera frames.
+    Frame compositor runs once for the entire recording session.
   */
   compositeVideoFrame();
   scheduleVideoFrames();
 
+  startRecorderSegment();
+
   toast(
-    "Video 720p · " +
+    "Video 720p · rolling 2 menit · " +
     (
       videoUsesManualFrames
         ? "manual frame sync"
@@ -3704,45 +3952,34 @@ async function startVideoRecording(){
         : ""
     ) +
     " · " +
-    videoFormat.label +
-    (
-      recorderUsesSingleFinalBlob
-        ? " · seek-safe finalize"
-        : " · chunked"
-    ) +
-    " · " +
-    stabilizerMode +
-    " · Logo MMS aktif"
+    recordingVideoFormat.label +
+    " · finalized segment · " +
+    stabilizerMode
   );
 }
+
 function stopVideoRecording(){
-  if(!isRecording()){
+  if(!recordingSessionActive){
     return;
   }
 
-  mediaRecorder.stop();
+  /*
+    Mark overall session stopped BEFORE stopping current segment.
+    onstop will therefore finalize/download it and then clean up
+    instead of opening another segment.
+  */
+  recordingSessionActive=false;
 
-  clearInterval(
-    recordingTimer
-  );
+  clearRecordingSegmentTimer();
 
-  stopVideoFrameLoop();
-
-  $("recBadge").classList.remove(
-    "show"
-  );
-
-  $("shutter").classList.remove(
-    "recording"
-  );
-
-  $("recTimer").textContent=
-    "00:00";
-
-  $("shutter").setAttribute(
-    "aria-label",
-    "Mulai video"
-  );
+  if(
+    mediaRecorder &&
+    mediaRecorder.state==="recording"
+  ){
+    mediaRecorder.stop();
+  }else{
+    cleanupRecordingSession();
+  }
 }
 
 /* =========================================================
