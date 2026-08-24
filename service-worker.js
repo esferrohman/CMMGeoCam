@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v12-3-grid-rolling";
+const CACHE_NAME = "cmm-geocam-v12-4-direction-aware";
 
 const APP_SHELL = [
   "./",
