@@ -85,8 +85,9 @@ video{
   left:14px;
   bottom:126px;
   display:flex;
-  align-items:center;
-  gap:8px;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:5px;
   width:max-content;
   max-width:calc(100vw - 28px);
   padding:8px 10px;
@@ -96,6 +97,43 @@ video{
   backdrop-filter:blur(7px);
   overflow:hidden;
   white-space:nowrap
+}
+.context-row,
+.tech-line{
+  display:flex;
+  align-items:center;
+  width:max-content;
+  max-width:100%;
+  white-space:nowrap
+}
+.context-row{
+  gap:7px;
+  font-size:11px;
+  line-height:1.1;
+  font-weight:800
+}
+.context-separator{
+  color:rgba(255,255,255,.38)
+}
+.weather-select{
+  appearance:auto;
+  color:#fff;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:7px;
+  padding:2px 5px;
+  font:inherit;
+  font-size:10px;
+  font-weight:800;
+  outline:none;
+  cursor:pointer
+}
+.weather-select option{
+  color:#111;
+  background:#fff
+}
+.tech-line{
+  gap:8px
 }
 .tech-row{
   display:flex;
@@ -328,8 +366,11 @@ canvas{display:none}
     right:18px;top:18px;
     width:max-content;
     min-width:145px;
-    max-width:min(27vw,250px);
+    max-width:min(30vw,290px);
     padding:7px 9px
+  }
+  .top-info.corridor-mode{
+    max-width:min(40vw,390px)
   }
   .sta-value{font-size:36px}
   .segment{font-size:11px}
@@ -348,6 +389,8 @@ canvas{display:none}
     max-width:calc(100vw - 36px);
     padding:8px 10px
   }
+  .context-row{font-size:10px}
+  .weather-select{font-size:9px}
 
   .bottom{
     left:50%;
@@ -500,21 +543,40 @@ canvas{display:none}
 
   <!-- WATERMARK KIRI BAWAH -->
   <div class="tech-info">
-    <div class="tech-row">
-      <div class="k">Koordinat</div>
-      <div class="v" id="coordValue">--, --</div>
+    <div class="context-row">
+      <span id="dateTimeValue">--/--/---- --:--:--</span>
+      <span class="context-separator">•</span>
+      <span>CUACA</span>
+      <select
+        id="weatherSelect"
+        class="weather-select"
+        aria-label="Kondisi cuaca">
+        <option value="AUTO">AUTO · MENUNGGU</option>
+        <option value="CERAH">CERAH</option>
+        <option value="BERAWAN">BERAWAN</option>
+        <option value="GERIMIS">GERIMIS</option>
+        <option value="HUJAN">HUJAN</option>
+        <option value="HUJAN LEBAT">HUJAN LEBAT</option>
+      </select>
     </div>
-    <div class="tech-row">
-      <div class="k">Speed</div>
-      <div class="v" id="speedValue">-- km/h</div>
-    </div>
-    <div class="tech-row">
-      <div class="k">Offset Network</div>
-      <div class="v" id="offsetValue">-- m</div>
-    </div>
-    <div class="tech-row">
-      <div class="k">Status Sistem</div>
-      <div class="v status-wait" id="systemValue">GPS WAIT</div>
+
+    <div class="tech-line">
+      <div class="tech-row">
+        <div class="k">Koordinat</div>
+        <div class="v" id="coordValue">--, --</div>
+      </div>
+      <div class="tech-row">
+        <div class="k">Speed</div>
+        <div class="v" id="speedValue">-- km/h</div>
+      </div>
+      <div class="tech-row">
+        <div class="k">Offset Network</div>
+        <div class="v" id="offsetValue">-- m</div>
+      </div>
+      <div class="tech-row">
+        <div class="k">Status Sistem</div>
+        <div class="v status-wait" id="systemValue">GPS WAIT</div>
+      </div>
     </div>
   </div>
 
@@ -540,7 +602,7 @@ canvas{display:none}
       <h1>CMM GeoCam</h1>
       <p>
         Prototype PWA untuk dokumentasi visual berbasis GPS,
-        Database Alignment, serta jaringan Ramp, Gate, dan Access. Aktifkan kamera, lalu izinkan lokasi presisi.
+        Road Network, timestamp, dan kondisi cuaca. Aktifkan kamera, lalu izinkan lokasi presisi.
       </p>
       <button class="btn" id="startBtn">Mulai Kamera</button>
     </div>
@@ -602,6 +664,27 @@ const SIBLING_CONFIRM_FIXES = 2;
   Search uses the surrounding 3x3 cells.
 */
 const NETWORK_GRID_SIZE = 0.0015;
+
+/*
+  Prototype 12.5 - Timestamp & Weather
+
+  AUTO weather is intended for prototype/evaluation.
+  Current weather is refreshed when:
+  - 10 minutes have passed, OR
+  - vehicle has moved about 3 km from the last weather query.
+
+  Field observation always wins: Inspector can override AUTO using
+  the weather selector without stopping camera / recording.
+*/
+const WEATHER_REFRESH_MS = 10 * 60 * 1000;
+const WEATHER_REFRESH_DISTANCE_M = 3000;
+
+let weatherMode = "AUTO";
+let autoWeather = "MENUNGGU";
+let weatherFetchInFlight = false;
+let weatherLastFetchAt = 0;
+let weatherLastLat = null;
+let weatherLastLon = null;
 
 let staData = [];
 let corridorData = [];
@@ -733,7 +816,10 @@ const state = {
   speedKmh:null,
   accuracy:null,
   offset:null,
-  status:"GPS WAIT"
+  status:"GPS WAIT",
+
+  dateTimeText:"--/--/---- --:--:--",
+  weatherText:"MENUNGGU"
 };
 
 const $ = id => document.getElementById(id);
@@ -869,6 +955,319 @@ function filenameTimestampFromDate(date){
   return `${y}${mo}${d}_${h}${mi}${s}`;
 }
 
+
+function displayDateTime(
+  date=new Date()
+){
+  const dd=
+    String(date.getDate())
+      .padStart(2,"0");
+
+  const mm=
+    String(date.getMonth()+1)
+      .padStart(2,"0");
+
+  const yyyy=
+    date.getFullYear();
+
+  const hh=
+    String(date.getHours())
+      .padStart(2,"0");
+
+  const mi=
+    String(date.getMinutes())
+      .padStart(2,"0");
+
+  const ss=
+    String(date.getSeconds())
+      .padStart(2,"0");
+
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}:${ss}`;
+}
+
+function weatherFromWMO(code){
+  const c=Number(code);
+
+  if(!Number.isFinite(c)){
+    return "N/A";
+  }
+
+  if(c===0 || c===1){
+    return "CERAH";
+  }
+
+  if(
+    c===2 ||
+    c===3 ||
+    c===45 ||
+    c===48
+  ){
+    return "BERAWAN";
+  }
+
+  if(
+    c===51 ||
+    c===53 ||
+    c===55 ||
+    c===56 ||
+    c===57
+  ){
+    return "GERIMIS";
+  }
+
+  if(
+    c===65 ||
+    c===67 ||
+    c===82 ||
+    c===95 ||
+    c===96 ||
+    c===99
+  ){
+    return "HUJAN LEBAT";
+  }
+
+  if(
+    c===61 ||
+    c===63 ||
+    c===66 ||
+    c===80 ||
+    c===81
+  ){
+    return "HUJAN";
+  }
+
+  /*
+    Snow / ice codes are not expected on Tangerang-Merak.
+    Keep a generic precipitation label if such a code is ever returned.
+  */
+  if(c>=71 && c<=77){
+    return "HUJAN";
+  }
+
+  return "BERAWAN";
+}
+
+function activeWeatherText(){
+  if(weatherMode!=="AUTO"){
+    return weatherMode;
+  }
+
+  return autoWeather || "N/A";
+}
+
+function updateWeatherSelectLabel(){
+  const select=
+    $("weatherSelect");
+
+  if(!select){
+    return;
+  }
+
+  const autoOption=
+    Array.from(
+      select.options
+    ).find(
+      option=>
+        option.value==="AUTO"
+    );
+
+  if(autoOption){
+    autoOption.textContent=
+      `AUTO · ${autoWeather}`;
+  }
+
+  select.value=
+    weatherMode;
+}
+
+function setWeatherMode(mode){
+  const allowed=[
+    "AUTO",
+    "CERAH",
+    "BERAWAN",
+    "GERIMIS",
+    "HUJAN",
+    "HUJAN LEBAT"
+  ];
+
+  weatherMode=
+    allowed.includes(mode)
+      ? mode
+      : "AUTO";
+
+  state.weatherText=
+    activeWeatherText();
+
+  updateWeatherSelectLabel();
+
+  overlayDirty=true;
+
+  toast(
+    weatherMode==="AUTO"
+      ? `Cuaca AUTO · ${state.weatherText}`
+      : `Cuaca manual · ${state.weatherText}`
+  );
+}
+
+async function fetchAutoWeather(
+  lat,
+  lon
+){
+  if(weatherFetchInFlight){
+    return;
+  }
+
+  weatherFetchInFlight=true;
+
+  try{
+    /*
+      Prototype/evaluation endpoint.
+      Operational corporate deployment should use an approved
+      commercial weather provider / endpoint.
+    */
+    const url=
+      "https://api.open-meteo.com/v1/forecast" +
+      `?latitude=${encodeURIComponent(lat)}` +
+      `&longitude=${encodeURIComponent(lon)}` +
+      "&current=weather_code" +
+      "&timezone=auto";
+
+    const response=
+      await fetch(
+        url,
+        {
+          method:"GET",
+          cache:"no-store"
+        }
+      );
+
+    if(!response.ok){
+      throw new Error(
+        `Weather HTTP ${response.status}`
+      );
+    }
+
+    const json=
+      await response.json();
+
+    const code=
+      json &&
+      json.current
+        ? json.current.weather_code
+        : null;
+
+    autoWeather=
+      weatherFromWMO(code);
+
+    weatherLastFetchAt=
+      Date.now();
+
+    weatherLastLat=
+      lat;
+
+    weatherLastLon=
+      lon;
+
+    state.weatherText=
+      activeWeatherText();
+
+    updateWeatherSelectLabel();
+
+    overlayDirty=true;
+  }catch(e){
+    console.warn(
+      "Weather AUTO:",
+      e
+    );
+
+    /*
+      Preserve the last valid AUTO value while temporarily offline.
+      If none has ever been received, expose N/A and allow manual
+      field override.
+    */
+    if(
+      !autoWeather ||
+      autoWeather==="MENUNGGU"
+    ){
+      autoWeather="N/A";
+    }
+
+    state.weatherText=
+      activeWeatherText();
+
+    updateWeatherSelectLabel();
+
+    overlayDirty=true;
+  }finally{
+    weatherFetchInFlight=false;
+  }
+}
+
+function maybeRefreshWeather(
+  lat,
+  lon
+){
+  if(
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon)
+  ){
+    return;
+  }
+
+  const now=
+    Date.now();
+
+  const timeExpired=
+    (
+      now-weatherLastFetchAt
+    )>=WEATHER_REFRESH_MS;
+
+  const movedFar=
+    (
+      weatherLastLat==null ||
+      weatherLastLon==null
+    )
+      ? true
+      : distance(
+          lat,
+          lon,
+          weatherLastLat,
+          weatherLastLon
+        )>=
+        WEATHER_REFRESH_DISTANCE_M;
+
+  if(
+    weatherLastFetchAt===0 ||
+    timeExpired ||
+    movedFar
+  ){
+    fetchAutoWeather(
+      lat,
+      lon
+    );
+  }
+}
+
+function updateClock(){
+  state.dateTimeText=
+    displayDateTime(
+      new Date()
+    );
+
+  state.weatherText=
+    activeWeatherText();
+
+  if($("dateTimeValue")){
+    $("dateTimeValue").textContent=
+      state.dateTimeText;
+  }
+
+  /*
+    Video overlay cache must refresh every second so burned-in
+    timestamp advances during recording.
+  */
+  overlayDirty=true;
+}
 
 function safeToken(value){
   return String(value || "")
@@ -2559,6 +2958,15 @@ function updatePosition(pos){
   */
   updateTravelBearing(pos);
 
+  /*
+    Weather lookup is non-blocking. GPS / locator keeps working even
+    when internet or weather service is unavailable.
+  */
+  maybeRefreshWeather(
+    state.lat,
+    state.lon
+  );
+
   if(
     !staData.length ||
     !corridorData.length
@@ -2701,6 +3109,19 @@ function corridorTertiaryText(){
 }
 
 function render(){
+  state.dateTimeText=
+    displayDateTime(
+      new Date()
+    );
+
+  state.weatherText=
+    activeWeatherText();
+
+  $("dateTimeValue").textContent=
+    state.dateTimeText;
+
+  updateWeatherSelectLabel();
+
   const topInfo=
     $("topInfo");
 
@@ -3494,8 +3915,22 @@ function drawWatermarks(
   );
 
   /* -------------------------
-     KIRI BAWAH - SINGLE LINE
+     KIRI BAWAH - TWO LINE
+
+     24/08/2026 10:03:32 • CUACA BERAWAN
+     Koordinat ... • Speed ... • Offset ... • Status ...
   ------------------------- */
+  const nowText=
+    displayDateTime(
+      new Date()
+    );
+
+  const weatherText=
+    activeWeatherText();
+
+  const contextText=
+    `${nowText}  •  CUACA ${weatherText}`;
+
   const coord=
     (
       state.lat!=null &&
@@ -3514,14 +3949,14 @@ function drawWatermarks(
       ? `${state.offset.toFixed(1)} m`
       : "-- m";
 
+  const contextFont=
+    Math.round(height*0.0185);
+
   const techFont=
-    Math.round(height*0.018);
+    Math.round(height*0.017);
 
   const labelFont=
-    Math.round(height*0.016);
-
-  const gap=
-    Math.round(width*0.010);
+    Math.round(height*0.015);
 
   const separator=
     "  •  ";
@@ -3534,31 +3969,39 @@ function drawWatermarks(
   ];
 
   /*
-    Measure full line so panel width follows content.
+    Measure technical line.
   */
-  let measuredWidth=0;
+  let technicalWidth=0;
 
   items.forEach((item,index)=>{
     ctx.font=
       `500 ${labelFont}px Arial`;
 
-    measuredWidth+=
+    technicalWidth+=
       ctx.measureText(item[0]).width;
 
     ctx.font=
       `800 ${techFont}px Arial`;
 
-    measuredWidth+=
+    technicalWidth+=
       ctx.measureText(item[1]).width;
 
     if(index<items.length-1){
       ctx.font=
         `500 ${labelFont}px Arial`;
 
-      measuredWidth+=
+      technicalWidth+=
         ctx.measureText(separator).width;
     }
   });
+
+  ctx.font=
+    `850 ${contextFont}px Arial`;
+
+  const contextWidth=
+    ctx.measureText(
+      contextText
+    ).width;
 
   const bottomPadX=
     Math.round(width*0.010);
@@ -3566,11 +4009,17 @@ function drawWatermarks(
   const bottomW=
     Math.min(
       width-pad*2,
-      Math.round(measuredWidth + bottomPadX*2)
+      Math.round(
+        Math.max(
+          contextWidth,
+          technicalWidth
+        )+
+        bottomPadX*2
+      )
     );
 
   const bottomH=
-    Math.round(height*0.055);
+    Math.round(height*0.088);
 
   const bottomX=
     pad;
@@ -3588,12 +4037,34 @@ function drawWatermarks(
     bottomH
   );
 
+  /*
+    LINE 1 - timestamp + weather
+  */
+  drawText(
+    ctx,
+    fitText(
+      ctx,
+      contextText,
+      bottomW-bottomPadX*2
+    ),
+    bottomX+bottomPadX,
+    bottomY+
+      Math.round(height*0.014),
+    contextFont,
+    true,
+    "left",
+    "#ffffff"
+  );
+
+  /*
+    LINE 2 - technical evidence
+  */
   let cursorX=
     bottomX+bottomPadX;
 
   const textY=
     bottomY+
-    Math.round(height*0.0165);
+    Math.round(height*0.052);
 
   items.forEach((item,index)=>{
     drawText(
@@ -4509,6 +4980,44 @@ $("shutter").addEventListener(
       startVideoRecording();
     }
   }
+);
+
+$("weatherSelect").addEventListener(
+  "change",
+  event=>{
+    setWeatherMode(
+      event.target.value
+    );
+
+    if(
+      weatherMode==="AUTO" &&
+      Number.isFinite(state.lat) &&
+      Number.isFinite(state.lon)
+    ){
+      /*
+        Force a fresh AUTO lookup when Inspector returns from
+        a manual override to AUTO.
+      */
+      weatherLastFetchAt=0;
+
+      maybeRefreshWeather(
+        state.lat,
+        state.lon
+      );
+    }
+  }
+);
+
+/*
+  Timestamp is device-local and advances every second.
+  This timer also marks the video overlay dirty so the burned-in
+  timestamp is not frozen between GPS updates.
+*/
+updateClock();
+
+setInterval(
+  updateClock,
+  1000
 );
 
 /* =========================================================

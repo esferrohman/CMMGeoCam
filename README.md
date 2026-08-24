@@ -1,7 +1,7 @@
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
-Prototype aktif: **12.4 — Direction-Aware Multi-Corridor**
+Prototype aktif: **12.5 — Timestamp & Weather**
 
 CMM GeoCam adalah Progressive Web App untuk dokumentasi visual inspeksi jalan berbasis GPS. Sistem menghubungkan foto/video dengan posisi aktual kendaraan pada jaringan Jalan Tol Tangerang–Merak.
 
@@ -74,6 +74,37 @@ ENTRANCE
 ```
 
 Tulisan `JALUR A/B` dibuat lebih besar untuk meningkatkan keterbacaan saat video bergerak.
+
+
+## Timestamp & Weather
+
+Prototype 12.5 menambahkan metadata waktu dan kondisi cuaca pada preview, foto, dan video.
+
+Format watermark bawah:
+
+```text
+24/08/2026 10:03:32 • CUACA BERAWAN
+Koordinat ... • Speed ... • Offset ... • Status ...
+```
+
+Timestamp menggunakan **tanggal dan jam lokal perangkat** dan diperbarui setiap detik.
+
+Mode cuaca:
+
+- `AUTO`
+- `CERAH`
+- `BERAWAN`
+- `GERIMIS`
+- `HUJAN`
+- `HUJAN LEBAT`
+
+Pada `AUTO`, versi prototype/evaluation mengambil `weather_code` berdasarkan GPS dan menerjemahkannya ke kategori operasional di atas. Refresh dilakukan sekitar setiap 10 menit atau setelah kendaraan berpindah sekitar 3 km.
+
+Inspector dapat melakukan **manual override** kapan saja. Manual override sengaja dipertahankan karena kondisi visual di titik inspeksi dapat berbeda dari model cuaca/grid forecast.
+
+Jika koneksi/cuaca AUTO tidak tersedia, locator dan perekaman tetap berjalan. Inspector dapat memilih kondisi cuaca manual.
+
+> Catatan penggunaan: endpoint cuaca AUTO pada Prototype 12.5 ditujukan untuk evaluasi/prototyping. Untuk penggunaan operasional perusahaan, gunakan weather provider/API yang telah disetujui perusahaan dan memiliki lisensi komersial yang sesuai.
 
 ## Camera & Video
 
@@ -154,6 +185,15 @@ Perhatikan terutama saat:
 
 ## Changelog
 
+### Prototype 12.5
+- timestamp tanggal dan jam lokal perangkat
+- timestamp video dinamis setiap detik
+- cuaca AUTO berdasarkan posisi GPS
+- manual weather override: Cerah, Berawan, Gerimis, Hujan, Hujan Lebat
+- watermark bawah menjadi dua baris
+- locator/recording tetap bekerja saat weather service offline
+- live corridor watermark width diselaraskan dengan output agar nama lokasi panjang tidak terpotong
+
 ### Prototype 12.4
 - direction-aware corridor matching
 - perbaikan Entrance vs Exit pada corridor paralel
@@ -182,4 +222,4 @@ Perhatikan terutama saat:
 
 ---
 
-**Current development branch:** Prototype 12.4
+**Current development branch:** Prototype 12.5

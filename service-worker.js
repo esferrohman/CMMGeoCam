@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v12-4-direction-aware";
+const CACHE_NAME = "cmm-geocam-v12-5-timestamp-weather";
 
 const APP_SHELL = [
   "./",
