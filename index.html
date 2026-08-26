@@ -31,7 +31,7 @@ video{
   position:absolute;right:14px;top:14px;
   width:max-content;
   min-width:150px;
-  max-width:min(42vw,390px);
+  max-width:min(44vw,420px);
   padding:8px 10px;
   background:var(--panel);
   border:1px solid var(--line);
@@ -43,12 +43,13 @@ video{
   display:none;
 }
 .sta-value{
-  font-size:32px;line-height:1;
+  font-size:clamp(26px,3vw,36px);
+  line-height:1;
   font-weight:900;
   margin-top:0;
   white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis
+  overflow:visible;
+  text-overflow:clip
 }
 .top-row{
   font-size:22px;
@@ -235,12 +236,24 @@ video{
 
 .rec-badge{
   display:none;
-  position:absolute;left:14px;top:58px;
-  padding:7px 10px;border-radius:999px;
-  background:rgba(190,20,28,.88);
-  font-size:10px;font-weight:900;
-  letter-spacing:.03em;
-  backdrop-filter:blur(7px)
+  position:absolute;
+  left:50%;
+  top:auto;
+  bottom:118px;
+  transform:translateX(-50%);
+  padding:8px 13px;
+  border-radius:999px;
+  background:rgba(190,20,28,.92);
+  border:1px solid rgba(255,255,255,.22);
+  font-size:14px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.04em;
+  font-variant-numeric:tabular-nums;
+  backdrop-filter:blur(7px);
+  box-shadow:0 5px 16px rgba(0,0,0,.28);
+  z-index:7;
+  white-space:nowrap
 }
 .rec-badge.show{display:block}
 
@@ -365,12 +378,12 @@ canvas{display:none}
   .top-info{
     right:18px;top:18px;
     width:max-content;
-    min-width:145px;
-    max-width:min(30vw,290px);
-    padding:7px 9px
+    min-width:165px;
+    max-width:min(36vw,360px);
+    padding:7px 10px
   }
   .top-info.corridor-mode{
-    max-width:min(40vw,390px)
+    max-width:min(42vw,420px)
   }
   .sta-value{font-size:36px}
   .segment{font-size:11px}
@@ -380,7 +393,13 @@ canvas{display:none}
     width:176px;
     max-width:28vw
   }
-  .rec-badge{left:18px;top:106px}
+  .rec-badge{
+    left:50%;
+    top:auto;
+    bottom:104px;
+    transform:translateX(-50%);
+    font-size:14px
+  }
 
   .tech-info{
     left:18px;
@@ -528,7 +547,7 @@ canvas{display:none}
   </div>
 
   <div class="rec-badge" id="recBadge">
-    ● REC <span id="recTimer">00:00</span>
+    ● REC <span id="recTimer">00:00:00</span>
   </div>
 
   <!-- WATERMARK KANAN ATAS -->
@@ -654,6 +673,19 @@ const CORRIDOR_HEADING_MAX_PENALTY_M = 22;
 */
 const SIBLING_SWITCH_ADVANTAGE_M = 2;
 const SIBLING_CONFIRM_FIXES = 2;
+
+/*
+  Prototype 13 - MAINLINE direction assist.
+
+  Existing STA trend remains as fallback, but the primary direction
+  evidence is now the vehicle travel bearing compared with the local
+  bearing of the validated alignment.
+
+  STA increasing direction = JALUR A
+  reverse direction         = JALUR B
+*/
+const MAINLINE_BEARING_TOLERANCE_DEG = 65;
+const MAINLINE_BEARING_SWITCH_FIXES = 2;
 
 /*
   ONE spatial-grid method for BOTH:
@@ -2021,6 +2053,46 @@ function buildNetworkIndexes(){
       staData
     );
 
+  /*
+    Local bearing for MAINLINE.
+
+    STA_Tamer is ordered by stationing. We use a small ±3 point chord
+    (about 30 m on the regular 5 m dataset) to smooth GPS/geometry
+    noise while preserving bends.
+
+    The bearing follows increasing STA, which is the same direction
+    previously used by STA trend logic for JALUR A.
+  */
+  for(
+    let i=0;
+    i<staData.length;
+    i++
+  ){
+    const from=
+      staData[
+        Math.max(
+          0,
+          i-3
+        )
+      ];
+
+    const to=
+      staData[
+        Math.min(
+          staData.length-1,
+          i+3
+        )
+      ];
+
+    staData[i].routeBearing=
+      bearingBetween(
+        from.lat,
+        from.lon,
+        to.lat,
+        to.lon
+      );
+  }
+
   corridorGrid=
     buildSpatialGrid(
       corridorData
@@ -2775,7 +2847,9 @@ function applyMainlineMatch(candidate){
       previousDirection;
   }
 
-  detectLane();
+  detectLane(
+    candidate.match.idx
+  );
 
   state.lane=
     lockedLane ||
@@ -2864,15 +2938,82 @@ function applyOutsideNetwork(){
 /* =========================================================
    JALUR A / B
 ========================================================= */
-function detectLane(){
+function laneFromMainlineBearing(
+  staIndex
+){
+  if(
+    !Number.isFinite(
+      lastTravelBearing
+    ) ||
+    staIndex<0 ||
+    staIndex>=staData.length
+  ){
+    return null;
+  }
+
+  const routeBearing=
+    staData[
+      staIndex
+    ].routeBearing;
+
+  if(
+    !Number.isFinite(
+      routeBearing
+    )
+  ){
+    return null;
+  }
+
+  const diffA=
+    bearingDifference(
+      lastTravelBearing,
+      routeBearing
+    );
+
+  const diffB=
+    bearingDifference(
+      lastTravelBearing,
+      (
+        routeBearing+180
+      )%360
+    );
+
+  if(
+    diffA!=null &&
+    diffA<=
+      MAINLINE_BEARING_TOLERANCE_DEG &&
+    diffA<diffB
+  ){
+    return "A";
+  }
+
+  if(
+    diffB!=null &&
+    diffB<=
+      MAINLINE_BEARING_TOLERANCE_DEG &&
+    diffB<diffA
+  ){
+    return "B";
+  }
+
+  return null;
+}
+
+function laneFromStaTrend(){
   if(staHistory.length<4){
-    return;
+    return null;
   }
 
   let trend=0;
 
-  for(let i=1;i<staHistory.length;i++){
-    const d=staHistory[i]-staHistory[i-1];
+  for(
+    let i=1;
+    i<staHistory.length;
+    i++
+  ){
+    const d=
+      staHistory[i]-
+      staHistory[i-1];
 
     if(d>1){
       trend++;
@@ -2882,26 +3023,51 @@ function detectLane(){
   }
 
   const net=
-    staHistory[staHistory.length-1] -
+    staHistory[
+      staHistory.length-1
+    ]-
     staHistory[0];
-
-  let detected=null;
 
   if(
     trend>=2 &&
     net>=MIN_DIRECTION_DELTA
   ){
-    detected="A";
-  }else if(
+    return "A";
+  }
+
+  if(
     trend<=-2 &&
     net<=-MIN_DIRECTION_DELTA
   ){
-    detected="B";
-  }else{
+    return "B";
+  }
+
+  return null;
+}
+
+function applyLaneEvidence(
+  detected,
+  strongEvidence
+){
+  if(!detected){
     return;
   }
 
+  /*
+    Strong bearing evidence can establish the initial carriageway
+    immediately. This is what allows a photo taken after slowing/stopping
+    to retain JALUR A/B from the last reliable approach direction.
+
+    A change to the opposite carriageway still needs confirmation.
+  */
   if(!lockedLane){
+    if(strongEvidence){
+      lockedLane=detected;
+      pendingLane=null;
+      laneConfirm=0;
+      return;
+    }
+
     if(detected===pendingLane){
       laneConfirm++;
 
@@ -2914,23 +3080,68 @@ function detectLane(){
       pendingLane=detected;
       laneConfirm=1;
     }
-  }else if(detected!==lockedLane){
-    if(detected===pendingLane){
-      laneConfirm++;
 
-      if(laneConfirm>=5){
-        lockedLane=detected;
-        pendingLane=null;
-        laneConfirm=0;
-      }
-    }else{
-      pendingLane=detected;
-      laneConfirm=1;
-    }
+    return;
+  }
+
+  if(detected===lockedLane){
+    pendingLane=null;
+    laneConfirm=0;
+    return;
+  }
+
+  if(detected===pendingLane){
+    laneConfirm++;
   }else{
+    pendingLane=detected;
+    laneConfirm=1;
+  }
+
+  const required=
+    strongEvidence
+      ? MAINLINE_BEARING_SWITCH_FIXES
+      : 5;
+
+  if(laneConfirm>=required){
+    lockedLane=detected;
     pendingLane=null;
     laneConfirm=0;
   }
+}
+
+function detectLane(
+  staIndex
+){
+  /*
+    Bearing is primary. lastTravelBearing is intentionally retained
+    while the vehicle stops, so lane information does not collapse
+    to "--" during roadside photo documentation.
+  */
+  const fromBearing=
+    laneFromMainlineBearing(
+      staIndex
+    );
+
+  if(fromBearing){
+    applyLaneEvidence(
+      fromBearing,
+      true
+    );
+
+    return;
+  }
+
+  /*
+    Fallback for devices/browsers that have not yet produced a reliable
+    travel bearing: preserve the original stationing-trend method.
+  */
+  const fromTrend=
+    laneFromStaTrend();
+
+  applyLaneEvidence(
+    fromTrend,
+    false
+  );
 }
 
 /* =========================================================
@@ -3535,6 +3746,36 @@ function fitText(
   return output+"…";
 }
 
+function fitFontSize(
+  ctx,
+  text,
+  weight,
+  preferredSize,
+  minSize,
+  maxWidth
+){
+  let size=
+    preferredSize;
+
+  while(
+    size>minSize
+  ){
+    ctx.font=
+      `${weight} ${size}px Arial`;
+
+    if(
+      ctx.measureText(text).width<=
+      maxWidth
+    ){
+      return size;
+    }
+
+    size--;
+  }
+
+  return minSize;
+}
+
 function drawCameraFrame(
   ctx,
   canvas
@@ -3767,7 +4008,7 @@ function drawWatermarks(
       (
         isCorridor
           ? 0.40
-          : 0.30
+          : 0.35
       )
     );
 
@@ -3801,9 +4042,10 @@ function drawWatermarks(
       Math.round(width*0.155),
       Math.min(
         maxPanelW,
-        Math.round(
+        Math.ceil(
           widestText +
-          topInnerPad*2
+          topInnerPad*2 +
+          2
         )
       )
     );
@@ -3837,39 +4079,59 @@ function drawWatermarks(
   const availableW=
     topW-topInnerPad*2;
 
-  ctx.font=
-    `900 ${primaryFont}px Arial`;
-
-  const fittedPrimary=
-    fitText(
+  /*
+    Prototype 13:
+    Primary and secondary location information must NEVER be ellipsized.
+    If a string reaches the panel limit, reduce its font just enough
+    to preserve the complete STA / location / JALUR text.
+  */
+  const primaryDrawFont=
+    fitFontSize(
       ctx,
       primaryText,
+      900,
+      primaryFont,
+      Math.round(
+        height*
+        (
+          isMainline
+            ? 0.036
+            : 0.032
+        )
+      ),
       availableW
     );
 
   drawText(
     ctx,
-    fittedPrimary,
+    primaryText,
     topX+topW-topInnerPad,
     topY+Math.round(height*0.017),
-    primaryFont,
+    primaryDrawFont,
     true,
     "right"
   );
 
-  ctx.font=
-    `900 ${secondaryFont}px Arial`;
-
-  const fittedSecondary=
-    fitText(
+  const secondaryDrawFont=
+    fitFontSize(
       ctx,
       secondaryText,
+      900,
+      secondaryFont,
+      Math.round(
+        height*
+        (
+          isMainline
+            ? 0.030
+            : 0.024
+        )
+      ),
       availableW
     );
 
   drawText(
     ctx,
-    fittedSecondary,
+    secondaryText,
     topX+topW-topInnerPad,
     topY+
       Math.round(
@@ -3880,7 +4142,7 @@ function drawWatermarks(
             : 0.078
         )
       ),
-    secondaryFont,
+    secondaryDrawFont,
     true,
     "right"
   );
@@ -4446,27 +4708,56 @@ function preferredVideoFormat(){
 }
 
 
-function updateRecordingTimer(){
-  const elapsed=
+function formatRecordingElapsed(
+  elapsedSeconds
+){
+  const hours=
+    Math.floor(
+      elapsedSeconds/3600
+    );
+
+  const minutes=
     Math.floor(
       (
-        Date.now() -
-        recordingStartedAt
-      )/1000
+        elapsedSeconds%3600
+      )/60
     );
 
-  const minute=
-    Math.floor(
-      elapsed/60
-    );
+  const seconds=
+    elapsedSeconds%60;
 
-  const second=
-    elapsed%60;
+  return (
+    String(hours)
+      .padStart(2,"0") +
+    ":" +
+    String(minutes)
+      .padStart(2,"0") +
+    ":" +
+    String(seconds)
+      .padStart(2,"0")
+  );
+}
+
+function updateRecordingTimer(){
+  /*
+    recordingStartedAt is set once per overall REC session and is NOT
+    touched when the 2-minute MediaRecorder segment rotates.
+  */
+  const elapsed=
+    Math.max(
+      0,
+      Math.floor(
+        (
+          Date.now()-
+          recordingStartedAt
+        )/1000
+      )
+    );
 
   $("recTimer").textContent=
-    String(minute).padStart(2,"0") +
-    ":" +
-    String(second).padStart(2,"0");
+    formatRecordingElapsed(
+      elapsed
+    );
 }
 
 function clearRecordingSegmentTimer(){
@@ -4519,7 +4810,7 @@ function cleanupRecordingSession(){
   );
 
   $("recTimer").textContent=
-    "00:00";
+    "00:00:00";
 
   $("shutter").setAttribute(
     "aria-label",

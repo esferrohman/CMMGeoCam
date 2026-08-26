@@ -1,7 +1,7 @@
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
-Prototype aktif: **12.5 — Timestamp & Weather**
+Prototype aktif: **13 — Enhanced Direction & Recording UI**
 
 CMM GeoCam adalah Progressive Web App untuk dokumentasi visual inspeksi jalan berbasis GPS. Sistem menghubungkan foto/video dengan posisi aktual kendaraan pada jaringan Jalan Tol Tangerang–Merak.
 
@@ -74,6 +74,52 @@ ENTRANCE
 ```
 
 Tulisan `JALUR A/B` dibuat lebih besar untuk meningkatkan keterbacaan saat video bergerak.
+
+
+## Prototype 13 Enhancements
+
+Prototype 13 memperkuat penggunaan CMM GeoCam untuk dokumentasi foto dan video di lapangan.
+
+### STA selalu lengkap
+
+Informasi utama tidak lagi menggunakan ellipsis.
+
+Contoh yang harus selalu terbaca penuh:
+
+```text
+STA 75+850
+JALUR A
+Segmen Serang Timur - Serang Barat
+```
+
+Jika lebar panel terbatas, ukuran font utama menyesuaikan secara otomatis. Nilai STA dan JALUR tidak dipotong menjadi `...`.
+
+### Mainline Direction-Aware
+
+Penentuan `JALUR A/B` sekarang menggunakan dua sumber bukti:
+
+1. **Travel bearing kendaraan vs local alignment bearing** sebagai sumber utama.
+2. **Trend perubahan STA** sebagai fallback.
+
+Arah geometri mainline dihitung dari Database Alignment. Arah increasing STA diperlakukan sebagai `JALUR A`, sedangkan arah berlawanan sebagai `JALUR B`, konsisten dengan logika trend sebelumnya.
+
+Arah perjalanan terakhir yang reliabel dipertahankan ketika kendaraan melambat atau berhenti. Dengan demikian foto yang diambil saat kendaraan berhenti di bahu jalan tidak langsung kehilangan informasi jalur.
+
+Jika aplikasi baru dibuka ketika kendaraan sudah diam dan belum pernah mendapat bukti arah yang cukup, aplikasi tetap menampilkan `JALUR --` daripada menebak.
+
+### Total REC Timer
+
+Saat video direkam, UI menampilkan:
+
+```text
+● REC 00:07:32
+```
+
+Timer menghitung **durasi total sesi recording** dalam format `HH:MM:SS`.
+
+Rolling finalized recording tetap memotong file setiap maksimal 2 menit, tetapi timer **tidak reset** saat pergantian segmen.
+
+Timer hanya merupakan bantuan operator pada UI dan tidak ditambahkan lagi ke burned-in watermark video karena video sudah memiliki timestamp tanggal dan jam aktual.
 
 
 ## Timestamp & Weather
@@ -185,6 +231,16 @@ Perhatikan terutama saat:
 
 ## Changelog
 
+### Prototype 13
+- STA dan informasi utama tidak lagi terpotong dengan ellipsis
+- adaptive watermark font untuk menjaga nilai STA tetap lengkap
+- penentuan JALUR A/B menggunakan travel bearing + local mainline bearing
+- arah terakhir dipertahankan ketika kendaraan melambat/berhenti
+- STA trend tetap tersedia sebagai fallback
+- total REC timer `HH:MM:SS`
+- REC timer tidak reset saat rolling segment 2 menit berganti
+- REC timer diposisikan dekat kontrol recording agar lebih mudah dipantau
+
 ### Prototype 12.5
 - timestamp tanggal dan jam lokal perangkat
 - timestamp video dinamis setiap detik
@@ -222,4 +278,4 @@ Perhatikan terutama saat:
 
 ---
 
-**Current development branch:** Prototype 12.5
+**Current development branch:** Prototype 13
