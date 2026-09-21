@@ -1,7 +1,7 @@
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
-Prototype aktif: **13 — Enhanced Direction & Recording UI**
+Prototype aktif: **13.1 — One-Hand Landscape Controls**
 
 CMM GeoCam adalah Progressive Web App untuk dokumentasi visual inspeksi jalan berbasis GPS. Sistem menghubungkan foto/video dengan posisi aktual kendaraan pada jaringan Jalan Tol Tangerang–Merak.
 
@@ -74,6 +74,28 @@ ENTRANCE
 ```
 
 Tulisan `JALUR A/B` dibuat lebih besar untuk meningkatkan keterbacaan saat video bergerak.
+
+
+
+## Prototype 13.1 — One-Hand Landscape Controls
+
+Perubahan ini berfokus pada ergonomi penggunaan satu tangan dan tidak mengubah algoritma lokasi maupun hasil foto/video.
+
+### Portrait
+
+- shutter tetap di bawah tengah
+- selector `FOTO / VIDEO` tetap menggunakan pola kamera biasa
+
+### Landscape
+
+- shutter otomatis pindah ke **kanan tengah**
+- selector `FOTO / VIDEO` ikut pindah ke thumb-zone
+- ukuran shutter diperbesar agar mudah dijangkau ibu jari
+- timer `REC HH:MM:SS` berada di sebelah kiri kontrol agar tidak tertutup tangan
+- evidence bar bagian bawah dibatasi agar tidak masuk ke area shutter
+- area tengah jalan tetap terbuka
+
+Rotasi hanya mengubah posisi UI. Locator, watermark hasil, timestamp, weather, Gyro-EIS, multi-corridor, dan rolling recording tidak berubah.
 
 
 ## Prototype 13 Enhancements
@@ -231,6 +253,14 @@ Perhatikan terutama saat:
 
 ## Changelog
 
+### Prototype 13.1
+- shutter landscape dipindahkan ke kanan tengah
+- FOTO/VIDEO ikut berada di thumb-zone kanan
+- shutter landscape diperbesar untuk penggunaan satu tangan
+- portrait tetap bawah-tengah
+- timer REC diposisikan agar tidak tertutup tangan
+- tidak ada perubahan pada matcher, database, weather, watermark, atau recording engine
+
 ### Prototype 13
 - STA dan informasi utama tidak lagi terpotong dengan ellipsis
 - adaptive watermark font untuk menjaga nilai STA tetap lengkap
@@ -278,4 +308,4 @@ Perhatikan terutama saat:
 
 ---
 
-**Current development branch:** Prototype 13
+**Current development branch:** Prototype 13.1

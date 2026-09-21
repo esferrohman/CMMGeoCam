@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v13-enhanced-direction-recording-ui";
+const CACHE_NAME = "cmm-geocam-v13-1-one-hand-controls";
 
 const APP_SHELL = [
   "./",
