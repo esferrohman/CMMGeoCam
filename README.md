@@ -1,7 +1,7 @@
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
-Prototype aktif: **13.1 — One-Hand Landscape Controls**
+Prototype aktif: **5.1.A — Corridor 102 + Right-Hand Landscape Controls**
 
 CMM GeoCam adalah Progressive Web App untuk dokumentasi visual inspeksi jalan berbasis GPS. Sistem menghubungkan foto/video dengan posisi aktual kendaraan pada jaringan Jalan Tol Tangerang–Merak.
 
@@ -77,9 +77,37 @@ Tulisan `JALUR A/B` dibuat lebih besar untuk meningkatkan keterbacaan saat video
 
 
 
-## Prototype 13.1 — One-Hand Landscape Controls
+## Prototype 5.1.A — Corridor 102 + Right-Hand Landscape Controls
 
-Perubahan ini berfokus pada ergonomi penggunaan satu tangan dan tidak mengubah algoritma lokasi maupun hasil foto/video.
+Build 5.1.A menggabungkan database corridor final 102 corridor dengan perbaikan ergonomi kontrol landscape.
+
+
+### Database corridor final
+
+Runtime `Corridor_Tamer.csv` diperbarui dari database lama menjadi hasil Stage 4 final:
+
+- 102 corridor tervalidasi
+- 8.339 titik referensi corridor
+- sampling internal 5 m
+- endpoint aktual tetap dipertahankan
+- mencakup RAMP, GATE, ACCESS, dan corridor Rest Area terbaru
+
+### Perbaikan shutter landscape
+
+Pada build sebelumnya, parent `.bottom` masih membawa `transform: translateX(-50%)`
+dari layout landscape lama. Setelah parent diperluas menjadi fullscreen, transform tersebut
+menggeser seluruh sistem koordinat kontrol ke kiri.
+
+Prototype 5.1.A mereset parent control layer dengan:
+
+```css
+transform: none !important;
+left: 0 !important;
+right: 0 !important;
+width: auto !important;
+```
+
+Kemudian cluster `FOTO / VIDEO + shutter` di-anchor langsung ke sisi kanan layar.
 
 ### Portrait
 
@@ -308,4 +336,4 @@ Perhatikan terutama saat:
 
 ---
 
-**Current development branch:** Prototype 13.1
+**Current development branch:** Prototype 5.1.A
