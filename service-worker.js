@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v5-1-a-corridor102-right-shutter";
+const CACHE_NAME = "cmm-geocam-v5-2-a-autosta-geocam-zoom";
 
 const APP_SHELL = [
   "./",

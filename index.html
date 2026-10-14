@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam</title>
+<title>CMM GeoCam 5.2.A</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -785,6 +785,96 @@ canvas{display:none}
   }
 }
 
+
+/* ============================================================
+   BUILD 5.2.A — Portrait Auto-STA + Landscape GeoCam Zoom
+   ============================================================ */
+.locator-view{display:none}
+.zoom-controls{display:flex; flex-direction:column; align-items:center; gap:5px; width:100%}
+.zoom-label{font-size:9px; font-weight:800; color:#d6d9dd; white-space:nowrap; letter-spacing:.045em}
+.zoom-presets{display:flex; align-items:center; justify-content:center; gap:4px; width:100%}
+.zoom-btn{
+  display:flex; align-items:center; justify-content:center;
+  width:39px; height:35px; padding:0;
+  border:1px solid rgba(255,255,255,.25);border-radius:11px;
+  background:rgba(255,255,255,.08);color:#e5e5e5;
+  font-size:12px;font-weight:900;cursor:pointer;touch-action:manipulation;
+}
+.zoom-btn.active{background:#f5a623;border-color:#f5a623;color:#101010}
+.zoom-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#preview{transform-origin:center center; transition:transform .16s ease}
+/* Hide controls until the camera is genuinely streaming. */
+.bottom{visibility:hidden}
+.app.camera-ready .bottom{visibility:visible}
+@media (orientation:landscape){
+  /* Reserve a right-side thumb zone without covering STA / JALUR. */
+  .top-info{right:188px !important;max-width:min(36vw,350px) !important}
+  .top-info.corridor-mode{max-width:min(40vw,360px) !important}
+  .sta-value{font-size:clamp(26px,4vw,36px) !important}
+  .capture-controls{min-width:150px !important;padding:10px 8px !important;gap:7px !important}
+  .rec-badge{right:185px !important}
+  .tech-info{max-width:calc(100vw - 192px) !important}
+}
+@media (orientation:landscape) and (max-height:430px){
+  .top-info{right:177px !important;max-width:min(35vw,320px) !important}
+  .top-info.corridor-mode{max-width:min(40vw,340px) !important}
+  .sta-value{font-size:clamp(24px,3.8vw,33px) !important}
+  .capture-controls{min-width:143px !important;padding:7px !important;gap:5px !important}
+  .zoom-btn{height:31px;width:37px;font-size:11px}
+  .zoom-label{font-size:8px}
+  .rec-badge{right:176px !important}
+  .tech-info{max-width:calc(100vw - 185px) !important}
+}
+@media (orientation:portrait){
+  .rotate-prompt{display:none !important}
+  .locator-view{
+    position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;
+    overflow-y:auto;overflow-x:hidden;
+    padding:calc(env(safe-area-inset-top) + 20px) 18px calc(env(safe-area-inset-bottom) + 24px);
+    background:linear-gradient(160deg,#15191f 0%,#090c0f 52%,#08090b 100%);
+    font-family:Arial,Helvetica,sans-serif;
+  }
+  .locator-header{flex:0 0 auto;text-align:left;max-width:600px;width:100%;margin:0 auto}
+  .locator-logo{display:block;max-width:230px;width:68%;height:auto;object-fit:contain;object-position:left center;background:#fff;border-radius:10px;padding:8px}
+  .locator-brand{margin-top:18px;font-size:13px;font-weight:900;letter-spacing:.12em;color:#fff}
+  .locator-brand span{color:#f5a623}
+  .locator-subtitle{font-size:10px;color:#bdc4ca;letter-spacing:.13em;margin-top:6px;font-weight:700}
+  .locator-body{display:flex;flex-direction:column;gap:14px;max-width:600px;width:100%;margin:18px auto 0;flex:1 0 auto}
+  .locator-live{
+    display:flex;align-items:center;gap:9px;color:#f6bf3c;
+    background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.12);
+    border-radius:14px;padding:13px 14px;font-size:12px;font-weight:900;
+  }
+  .locator-live.ready{color:#34c77b}
+  .locator-live.bad{color:#ff6d6d}
+  .locator-live-dot{width:9px;height:9px;background:currentColor;border-radius:50%;flex:0 0 auto}
+  .locator-primary-card{
+    display:flex;flex-direction:column;justify-content:center;
+    background:#f5a623;border:1px solid rgba(255,255,255,.10);border-radius:22px;
+    color:#181818;padding:23px 20px;min-height:179px;
+    box-shadow:0 12px 36px rgba(0,0,0,.20);
+  }
+  .locator-overline{font-size:10px;letter-spacing:.075em;font-weight:800;opacity:.78}
+  .locator-primary{font-size:clamp(25px,8vw,43px);font-weight:900;letter-spacing:-.045em;margin-top:8px;line-height:1.06;overflow-wrap:anywhere}
+  .locator-primary.corridor{font-size:clamp(24px,7vw,35px)}
+  .locator-lane{font-size:20px;font-weight:900;margin-top:9px}
+  .locator-segment{font-size:12px;line-height:1.45;font-weight:700;margin-top:9px}
+  .locator-section-heading{font-size:10px;color:#c4cbd0;font-weight:900;letter-spacing:.13em;margin-top:4px}
+  .locator-data-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .locator-field{
+    display:flex;flex-direction:column;min-width:0;gap:10px;
+    background:#191d21;border:1px solid rgba(255,255,255,.13);
+    padding:15px 13px;border-radius:15px;
+  }
+  .locator-field span{font-size:10px;color:#b8c0c6;font-weight:800;letter-spacing:.06em}
+  .locator-field strong{font-size:clamp(12px,3.5vw,16px);font-weight:800;overflow-wrap:anywhere;color:#fff}
+  .locator-footer{display:flex;flex-direction:column;align-items:center;gap:13px;margin-top:auto;padding-top:9px}
+  .locator-time{font-variant-numeric:tabular-nums;font-size:12px;color:#ced4da;font-weight:800}
+  .locator-gps-button{width:100%;border:0;border-radius:12px;background:#f5a623;color:#111;padding:15px 20px;font-size:13px;font-weight:900;cursor:pointer}
+  .locator-gps-button:disabled{cursor:default;opacity:.65}
+  .locator-orientation-hint{color:#a9b1b8;font-size:11px;text-align:center;line-height:1.5}
+}
+
 </style>
 </head>
 
@@ -904,12 +994,58 @@ canvas{display:none}
     </div>
   </div>
 
+  <!-- 5.2.A: GPS AUTO-STA PORTRAIT (shares same locator state as GeoCam) -->
+  <section class="locator-view" id="locatorView" aria-label="GPS Auto-STA Locator">
+    <header class="locator-header">
+      <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
+      <div class="locator-brand">CMM GEOCAM <span>5.2.A</span></div>
+      <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
+    </header>
+
+    <div class="locator-body">
+      <div class="locator-live" id="locatorLiveBadge">
+        <span class="locator-live-dot" id="locatorDot"></span>
+        <span id="locatorStatus">GPS WAIT</span>
+      </div>
+
+      <div class="locator-primary-card">
+        <div class="locator-overline" id="locatorKind">MAINLINE / ROAD NETWORK</div>
+        <div class="locator-primary" id="locatorPrimary">STA --+---</div>
+        <div class="locator-lane" id="locatorLane">JALUR --</div>
+        <div class="locator-segment" id="locatorSegment">Menunggu data lokasi</div>
+      </div>
+
+      <div class="locator-section-heading">DATA POSISI AKTUAL</div>
+      <div class="locator-data-grid">
+        <div class="locator-field"><span>KOORDINAT</span><strong id="locatorCoord">--, --</strong></div>
+        <div class="locator-field"><span>AKURASI GPS</span><strong id="locatorAccuracy">-- m</strong></div>
+        <div class="locator-field"><span>OFFSET NETWORK</span><strong id="locatorOffset">-- m</strong></div>
+        <div class="locator-field"><span>KECEPATAN</span><strong id="locatorSpeed">-- km/h</strong></div>
+      </div>
+
+      <div class="locator-footer">
+        <div class="locator-time" id="locatorDateTime">--/--/---- --:--:--</div>
+        <button type="button" id="locatorStartGPS" class="locator-gps-button">Aktifkan GPS Presisi</button>
+        <div class="locator-orientation-hint">Putar HP ke landscape untuk kamera foto/video 16:9</div>
+      </div>
+    </div>
+  </section>
+
   <!-- FOTO / VIDEO -->
   <div class="bottom">
     <div class="capture-controls">
       <div class="mode-switch">
         <button class="mode-btn active" id="photoModeBtn" type="button">FOTO</button>
         <button class="mode-btn" id="videoModeBtn" type="button">VIDEO</button>
+      </div>
+
+      <div class="zoom-controls" role="group" aria-label="Zoom kamera">
+        <div class="zoom-label" id="zoomLabel">ZOOM · DIGITAL</div>
+        <div class="zoom-presets">
+          <button type="button" class="zoom-btn active" data-zoom="1" aria-pressed="true">1×</button>
+          <button type="button" class="zoom-btn" data-zoom="2" aria-pressed="false">2×</button>
+          <button type="button" class="zoom-btn" data-zoom="4" aria-pressed="false">4×</button>
+        </div>
       </div>
 
       <button
@@ -940,7 +1076,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.1.A";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.A";
 
 /* =========================================================
    CONFIG
@@ -1044,6 +1180,22 @@ let pendingNetworkCount = 0;
 */
 let motionHistory = [];
 let lastTravelBearing = null;
+
+// 5.2.A — Zoom presets 1× / 2× / 4×.
+// Device zoom is attempted first. Any remaining magnification is a
+// deterministic digital crop used identically by preview and canvas.
+let zoomRequested = 1;
+let zoomNativeApplied = 1;
+let zoomNativeCapabilities = null;
+let zoomVideoTrack = null;
+let zoomUpdatePending = false;
+let zoomUpdateAgain = false;
+
+// One GPS watcher is shared between portrait and landscape. Never restart
+// it on rotation: route persistence and last travel bearing must survive.
+let gpsWatchId = null;
+let gpsStartPending = false;
+let lastGPSPosition = null;
 
 let mediaStream = null;
 let staHistory = [];
@@ -1607,6 +1759,7 @@ function updateClock(){
     timestamp advances during recording.
   */
   overlayDirty=true;
+  if($("locatorDateTime")) $("locatorDateTime").textContent=state.dateTimeText;
 }
 
 function safeToken(value){
@@ -1683,6 +1836,8 @@ function setDiag(id,value){
 
 function updateStabilizerUI(){
   const btn=$("stabToggle");
+  // Keep preview field-of-view consistent with the EIS crop in saved files.
+  if($("preview")) updateZoomUI();
 
   if(btn){
     btn.classList.remove("off","active","native");
@@ -2488,8 +2643,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.1.A"),
-        fetch("./Corridor_Tamer.csv?v=5.1.A")
+        fetch("./STA_Tamer.csv?v=5.2.A"),
+        fetch("./Corridor_Tamer.csv?v=5.2.A")
       ]);
 
     if(!staResponse.ok){
@@ -2511,6 +2666,9 @@ async function loadDatabase(){
       );
 
     buildNetworkIndexes();
+
+    // If the GPS fix arrived before CSV loading finished, match it now.
+    if(lastGPSPosition) updatePosition(lastGPSPosition);
 
     toast(
       "Road Network siap: " +
@@ -3456,6 +3614,7 @@ function detectLane(
    GPS
 ========================================================= */
 function updatePosition(pos){
+  lastGPSPosition=pos;
   state.lat=pos.coords.latitude;
   state.lon=pos.coords.longitude;
   state.accuracy=pos.coords.accuracy;
@@ -3544,25 +3703,51 @@ function updatePosition(pos){
 }
 
 function startGPS(){
+  if(gpsWatchId!==null || gpsStartPending){
+    return;
+  }
   if(!navigator.geolocation){
+    state.status="GPS UNSUPPORTED";
+    render();
     toast("GPS tidak didukung browser.");
     return;
   }
 
-  navigator.geolocation.watchPosition(
-    updatePosition,
-    e=>{
-      toast(
-        "GPS: " +
-        (e.message||"tidak tersedia")
-      );
-    },
-    {
-      enableHighAccuracy:true,
-      maximumAge:0,
-      timeout:8000
-    }
-  );
+  gpsStartPending=true;
+  state.status="GPS WAIT";
+  render();
+  try{
+    gpsWatchId=navigator.geolocation.watchPosition(
+      updatePosition,
+      e=>{
+        state.status=e.code===1 ? "GPS DENIED" : "GPS WAIT";
+        render();
+        toast("GPS: " + (e.message||"tidak tersedia"));
+        if(e.code===1 && gpsWatchId!==null){
+          navigator.geolocation.clearWatch(gpsWatchId);
+          gpsWatchId=null;
+          renderPortraitLocator();
+        }
+      },
+      {enableHighAccuracy:true,maximumAge:0,timeout:8000}
+    );
+  }catch(e){
+    gpsWatchId=null;
+    state.status="GPS ERROR";
+    toast("GPS tidak dapat diaktifkan: " + (e.message||e.name));
+  }finally{
+    gpsStartPending=false;
+    renderPortraitLocator();
+  }
+}
+
+// Don't prompt for location at app load if it has not yet been granted.
+async function autoResumeGrantedGPS(){
+  try{
+    if(!navigator.permissions || !navigator.permissions.query) return;
+    const permission=await navigator.permissions.query({name:"geolocation"});
+    if(permission.state==="granted") startGPS();
+  }catch(e){}
 }
 
 /* =========================================================
@@ -3625,6 +3810,54 @@ function corridorTertiaryText(){
   }
 
   return "";
+}
+
+/* =========================================================
+   5.2.A — Portrait Auto-STA presentation (shared matcher state)
+   ========================================================= */
+function renderPortraitLocator(){
+  const statusText = state.status || "GPS WAIT";
+  const ready = isReadyStatus(statusText);
+  const bad = statusText==="OUTSIDE NETWORK" ||
+    statusText==="DATABASE ERROR" || statusText==="GPS DENIED";
+
+  $("locatorStatus").textContent = statusText;
+  $("locatorLiveBadge").classList.toggle("ready",ready);
+  $("locatorLiveBadge").classList.toggle("bad",bad);
+
+  const isMainline = state.networkType==="MAINLINE";
+  const isCorridor = ["RAMP","GATE","ACCESS"].includes(state.networkType);
+  const primary = $("locatorPrimary");
+  primary.classList.toggle("corridor",isCorridor);
+  if(isMainline){
+    $("locatorKind").textContent="MAINLINE · ALIGNMENT LEDGER";
+    primary.textContent=`STA ${state.staText}`;
+    $("locatorLane").textContent=`JALUR ${state.lane}`;
+    $("locatorSegment").textContent=`Segmen ${state.segment}`;
+  }else if(isCorridor){
+    $("locatorKind").textContent=state.networkType+" · ROAD NETWORK";
+    primary.textContent=state.location || state.networkType;
+    $("locatorLane").textContent=corridorSecondaryText();
+    const part = corridorTertiaryText();
+    $("locatorSegment").textContent=part || "Jaringan jalan non-mainline";
+  }else{
+    $("locatorKind").textContent="ROAD NETWORK · MENUNGGU GPS";
+    primary.textContent="STA --+---";
+    $("locatorLane").textContent="JALUR --";
+    $("locatorSegment").textContent=state.segment;
+  }
+
+  $("locatorCoord").textContent =
+    Number.isFinite(state.lat) && Number.isFinite(state.lon)
+      ? `${state.lat.toFixed(6)}, ${state.lon.toFixed(6)}` : "--, --";
+  $("locatorAccuracy").textContent = Number.isFinite(state.accuracy)
+    ? `${state.accuracy.toFixed(1)} m` : "-- m";
+  $("locatorOffset").textContent = Number.isFinite(state.offset)
+    ? `${state.offset.toFixed(1)} m` : "-- m";
+  $("locatorSpeed").textContent = Number.isFinite(state.speedKmh)
+    ? `${state.speedKmh.toFixed(1)} km/h` : "-- km/h";
+  $("locatorDateTime").textContent = state.dateTimeText;
+  $("locatorStartGPS").hidden = gpsWatchId!==null || gpsStartPending;
 }
 
 function render(){
@@ -3762,64 +3995,36 @@ function render(){
     Rebuild overlay only when GPS/network/UI data changes.
   */
   overlayDirty=true;
+  renderPortraitLocator();
 }
 
 /* =========================================================
-   LANDSCAPE MODE
-   - PWA installed: manifest mengunci landscape-primary.
-   - Browser biasa: mencoba fullscreen + Screen Orientation API.
-   - Jika browser menolak, CSS menampilkan petunjuk putar perangkat.
-========================================================= */
+   5.2.A — Landscape camera immersion (NO orientation lock).
+   GPS Auto-STA must remain accessible by rotating to portrait.
+   ========================================================= */
 async function tryForceLandscape(){
+  // Optional browser fullscreen. Unlike 5.1.A, we DO NOT call
+  // screen.orientation.lock('landscape') or the user would be unable
+  // to return to the portrait Auto-STA view on installed PWAs.
   try{
     const standalone=
       window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-
-    /*
-      Di browser biasa, fullscreen meningkatkan kemungkinan
-      orientation.lock() diizinkan oleh Android/Chromium.
-    */
-    if(
-      !standalone &&
-      document.documentElement.requestFullscreen &&
-      !document.fullscreenElement
-    ){
+      window.navigator.standalone===true;
+    if(!standalone && document.documentElement.requestFullscreen &&
+       !document.fullscreenElement){
       try{
-        await document.documentElement.requestFullscreen({
-          navigationUI:"hide"
-        });
-      }catch(e){
-        /*
-          Tidak fatal. User masih bisa memutar HP manual.
-        */
-      }
+        await document.documentElement.requestFullscreen({navigationUI:"hide"});
+      }catch(e){}
     }
-
-    if(
-      screen.orientation &&
-      screen.orientation.lock
-    ){
-      try{
-        await screen.orientation.lock("landscape");
-      }catch(e){
-        /*
-          Beberapa browser hanya mengizinkan lock pada
-          installed PWA atau fullscreen.
-        */
-      }
-    }
-  }catch(e){
-    /*
-      Fallback ditangani oleh rotate prompt.
-    */
-  }
+  }catch(e){}
 }
 
 /* =========================================================
    CAMERA
 ========================================================= */
 async function startCamera(){
+  if(!requireLandscape()) return;
+  if(mediaStream) return;
   detectNativeEISConstraint();
 
   /*
@@ -3829,8 +4034,8 @@ async function startCamera(){
   await prepareDeviceMotionPermission();
 
   /*
-    Harus dipanggil langsung dari tap user agar browser
-    punya peluang mengizinkan fullscreen/orientation lock.
+    Dipanggil dari tap user agar browser bisa memberi izin
+    fullscreen dan kamera pada mode landscape.
   */
   await tryForceLandscape();
 
@@ -3897,6 +4102,7 @@ async function startCamera(){
     }
 
     updateOverscanAvailability();
+    detectCameraZoom(videoTrack);
 
     /*
       Priority:
@@ -3912,6 +4118,7 @@ async function startCamera(){
     }
 
     $("empty").classList.add("hidden");
+    document.querySelector(".app").classList.add("camera-ready");
 
     startGPS();
     updateStabilizerUI();
@@ -4084,6 +4291,101 @@ function fitFontSize(
   return minSize;
 }
 
+/* =========================================================
+   5.2.A — Native / Digital Camera Zoom (1×, 2×, 4×)
+   ========================================================= */
+function zoomDigitalRatio(){
+  // When device zoom is active, never crop twice for the same magnification.
+  return Math.max(1,zoomRequested/Math.max(1,zoomNativeApplied));
+}
+
+function updateZoomUI(){
+  document.querySelectorAll(".zoom-btn").forEach(button=>{
+    const active=Number(button.dataset.zoom)===zoomRequested;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",String(active));
+  });
+  const usesNative = zoomNativeCapabilities && zoomNativeApplied>1.01;
+  $("zoomLabel").textContent=usesNative
+    ? (zoomDigitalRatio()>1.01 ? "ZOOM · HYBRID" : "ZOOM · DEVICE")
+    : "ZOOM · DIGITAL";
+
+  // The <video> element uses object-fit:cover. CSS magnification therefore
+  // matches the centered software crop that drawCameraFrame() uses.
+  const previewScale=zoomDigitalRatio() * (isGyroEISActive()?1/EIS_CROP_RATIO:1);
+  $("preview").style.transform=`scale(${previewScale.toFixed(5)})`;
+}
+
+function resetNativeZoomState(){
+  zoomVideoTrack=null;
+  zoomNativeCapabilities=null;
+  zoomNativeApplied=1;
+  zoomUpdatePending=false;
+  zoomUpdateAgain=false;
+  updateZoomUI();
+}
+
+function detectCameraZoom(track){
+  zoomVideoTrack=track || null;
+  zoomNativeCapabilities=null;
+  zoomNativeApplied=1;
+  try{
+    const caps=track && track.getCapabilities && track.getCapabilities();
+    const z=caps && caps.zoom;
+    if(z && Number.isFinite(z.min) && Number.isFinite(z.max) && z.max>z.min){
+      zoomNativeCapabilities={min:z.min,max:z.max,step:z.step||0.1};
+      const settings=track.getSettings && track.getSettings();
+      if(settings && Number.isFinite(settings.zoom)) zoomNativeApplied=settings.zoom;
+    }
+  }catch(e){}
+  updateZoomUI();
+  requestCameraZoom();
+}
+
+function setCameraZoom(level){
+  if(![1,2,4].includes(level)) return;
+  zoomRequested=level;
+  updateZoomUI();
+  requestCameraZoom();
+}
+
+async function requestCameraZoom(){
+  if(!zoomVideoTrack || !zoomNativeCapabilities || !zoomVideoTrack.applyConstraints){
+    updateZoomUI();
+    return;
+  }
+  if(zoomUpdatePending){
+    zoomUpdateAgain=true;
+    return;
+  }
+  zoomUpdatePending=true;
+  try{
+    do{
+      zoomUpdateAgain=false;
+      const track=zoomVideoTrack;
+      const caps=zoomNativeCapabilities;
+      if(!track || !caps) break;
+      const nativeTarget=Math.min(caps.max,Math.max(caps.min,zoomRequested));
+      try{
+        await track.applyConstraints({advanced:[{zoom:nativeTarget}]});
+        // Defensive against an old track finishing after camera replacement.
+        if(track!==zoomVideoTrack) break;
+        const settings=track.getSettings && track.getSettings();
+        zoomNativeApplied=Number.isFinite(settings && settings.zoom)
+          ? settings.zoom : nativeTarget;
+      }catch(e){
+        if(track!==zoomVideoTrack) break;
+        zoomNativeCapabilities=null;
+        zoomNativeApplied=1; // software fallback: still honours selected preset
+      }
+      updateZoomUI();
+    }while(zoomUpdateAgain && zoomNativeCapabilities);
+  }finally{
+    zoomUpdatePending=false;
+    updateZoomUI();
+  }
+}
+
 function drawCameraFrame(
   ctx,
   canvas
@@ -4111,23 +4413,23 @@ function drawCameraFrame(
     baseW=baseH*targetAspect;
   }
 
-  let cropW=baseW;
-  let cropH=baseH;
+  // Native zoom has already modified the input video track. The rest
+  // is a single centered digital crop, shared by photo and video.
+  const digitalZoom=zoomDigitalRatio();
+  const digitalW=baseW/digitalZoom;
+  const digitalH=baseH/digitalZoom;
+  let cropW=digitalW;
+  let cropH=digitalH;
 
-  /*
-    Software EIS intentionally zooms into the larger camera input.
-    This creates a margin in which the source crop can move.
-  */
+  // EIS uses its own limited overscan within the selected zoom viewport.
+  // It must NOT consume extra digital-zoom margin when moving the crop.
   if(isGyroEISActive()){
-    cropW=baseW*EIS_CROP_RATIO;
-    cropH=baseH*EIS_CROP_RATIO;
+    cropW*=EIS_CROP_RATIO;
+    cropH*=EIS_CROP_RATIO;
   }
 
-  const maxShiftX=
-    Math.max(0,(baseW-cropW)/2);
-
-  const maxShiftY=
-    Math.max(0,(baseH-cropH)/2);
+  const maxShiftX=Math.max(0,(digitalW-cropW)/2);
+  const maxShiftY=Math.max(0,(digitalH-cropH)/2);
 
   const sourcePerOutputX=
     cropW/canvas.width;
@@ -4871,10 +5173,8 @@ function canStartCapture(){
     return false;
   }
 
-  if(!mediaStream){
-    toast(
-      "Aktifkan kamera terlebih dahulu."
-    );
+  if(!mediaStream || $("preview").readyState<2 || !$("preview").videoWidth){
+    toast("Tunggu sampai kamera siap.");
     return false;
   }
 
@@ -5555,6 +5855,12 @@ $("startBtn").addEventListener(
   startCamera
 );
 
+$("locatorStartGPS").addEventListener("click",startGPS);
+document.querySelectorAll(".zoom-btn").forEach(button=>{
+  button.addEventListener("click",()=>setCameraZoom(Number(button.dataset.zoom)));
+});
+
+
 $("photoModeBtn").addEventListener(
   "click",
   ()=>setCaptureMode("photo")
@@ -5718,6 +6024,8 @@ updateStabilizerUI();
 loadDatabase();
 render();
 setCaptureMode("photo");
+updateZoomUI();
+autoResumeGrantedGPS();
 
 if(
   "serviceWorker" in navigator
@@ -5726,7 +6034,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.1.A")
+        .register("./service-worker.js?v=5.2.A")
         .catch(console.error);
     }
   );

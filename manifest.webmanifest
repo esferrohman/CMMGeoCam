@@ -1,11 +1,10 @@
 {
-  "name": "CMM GeoCam",
+  "name": "CMM GeoCam 5.2.A",
   "short_name": "CMM GeoCam",
-  "description": "Geo-Referenced Visual Inspection berbasis GPS, Database Alignment, dan Multi-Corridor Road Network",
+  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom 1x/2x/4x, Road Network, dan dokumentasi foto/video ber-watermark",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "landscape-primary",
   "background_color": "#090b0d",
   "theme_color": "#0d0f11",
   "icons": [

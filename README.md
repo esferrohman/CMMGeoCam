@@ -1,7 +1,7 @@
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
-Prototype aktif: **5.1.A — Corridor 102 + Right-Hand Landscape Controls**
+Prototype aktif: **5.2.A — GPS Auto-STA + GeoCam Zoom**
 
 CMM GeoCam adalah Progressive Web App untuk dokumentasi visual inspeksi jalan berbasis GPS. Sistem menghubungkan foto/video dengan posisi aktual kendaraan pada jaringan Jalan Tol Tangerang–Merak.
 
@@ -109,7 +109,7 @@ width: auto !important;
 
 Kemudian cluster `FOTO / VIDEO + shutter` di-anchor langsung ke sisi kanan layar.
 
-### Portrait
+### Portrait (riwayat versi 5.1.A, digantikan oleh Auto-STA pada 5.2.A)
 
 - shutter tetap di bawah tengah
 - selector `FOTO / VIDEO` tetap menggunakan pola kamera biasa
@@ -279,7 +279,40 @@ Perhatikan terutama saat:
 - mulai bergerak kembali
 - berpindah antara mainline dan ramp
 
+## Prototype 5.2.A — Integrasi Auto-STA dan GeoCam + Zoom
+
+**Tampilan portrait:** GPS AUTO-STA LOCATOR. STA/Jalur/Segmen untuk MAINLINE,
+serta Lokasi/Tipe/Arah/Jarak untuk RAMP, GATE, dan ACCESS. Menampilkan status GPS,
+koordinat, akurasi GPS, offset network, kecepatan, dan timestamp. Tombol
+“Aktifkan GPS Presisi” bisa digunakan tanpa menghidupkan kamera.
+
+**Tampilan landscape:** CMM GeoCam 16:9 dengan kontrol FOTO/VIDEO dan shutter
+pada sisi kanan, watermark, cuaca, stabilisasi, dan rolling recording 2 menit.
+Tambahan tombol zoom **1×, 2×, 4×** berfungsi untuk preview, foto, dan video.
+Bila `MediaStreamTrack.getCapabilities().zoom` tersedia, aplikasi mencoba zoom
+device terlebih dahulu, lalu memakai digital crop untuk sisa perbesaran.
+Bila tidak tersedia/gagal, zoom memakai digital crop penuh. Pada zoom digital
+4×, kualitas gambar berpotensi menurun karena jumlah piksel sumber lebih sedikit.
+
+**Perubahan orientasi:** Manifest dan browser tidak mengunci landscape. Data GPS/network dan bearing kendaraan dipertahankan.
+Jika perekaman sedang berjalan dan pengguna memutar ke portrait,
+perekaman difinalisasi otomatis sebagaimana mekanisme 5.1.A. GPS tidak
+melakukan start ulang. Kamera cukup diaktifkan satu kali dari landscape.
+
+**Penting:** Kamera dan GPS memerlukan HTTPS/localhost dan izin browser.
+Pastikan file diunggah dengan nama tepat (tanpa angka suffix unduhan).
+Jalankan sebagai static website/PWA; membuka HTML via `file://` tidak cukup.
+
 ## Changelog
+
+### Prototype 5.2.A
+- integrasi portrait GPS Auto-STA dan landscape GeoCam dalam satu halaman
+- GPS watcher dan hasil matching dipakai bersama saat orientasi berubah
+- zoom preset 1×, 2×, 4× untuk preview, hasil foto, dan rekaman video
+- hardware zoom bila tersedia, digital fallback bila tidak
+- cache Service Worker dibedakan dari build 5.1.A
+- PWA manifest tidak lagi mengunci landscape secara permanen
+
 
 ### Prototype 13.1
 - shutter landscape dipindahkan ke kanan tengah
@@ -336,4 +369,4 @@ Perhatikan terutama saat:
 
 ---
 
-**Current development branch:** Prototype 5.1.A
+**Current development branch:** Prototype 5.2.A
