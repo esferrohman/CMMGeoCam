@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.A</title>
+<title>CMM GeoCam 5.2.B</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -875,6 +875,134 @@ canvas{display:none}
   .locator-orientation-hint{color:#a9b1b8;font-size:11px;text-align:center;line-height:1.5}
 }
 
+
+/* ============================================================
+   5.2.B — Portrait inspection dashboard refinement
+   Changes visual hierarchy only. GPS and matching are shared.
+   ============================================================ */
+@media (orientation:portrait){
+  .locator-view{
+    padding:calc(env(safe-area-inset-top) + 26px) 20px calc(env(safe-area-inset-bottom) + 26px);
+    background:
+      radial-gradient(ellipse 95% 46% at 88% -5%,rgba(245,166,35,.12),transparent 72%),
+      radial-gradient(ellipse 65% 38% at -15% 73%,rgba(67,78,89,.12),transparent 76%),
+      linear-gradient(170deg,#15191d 0%,#0e1115 48%,#090b0e 100%);
+  }
+  .locator-header{
+    display:grid;grid-template-columns:minmax(115px,39%) minmax(0,1fr);
+    column-gap:16px;align-items:center;
+    padding:0 0 23px;
+    border-bottom:1px solid rgba(255,255,255,.095);
+  }
+  .locator-logo{
+    width:100%;max-width:180px;min-width:0;
+    border-radius:11px;
+    padding:8px 9px;
+    background:#f9fafb;
+    box-shadow:0 5px 18px rgba(0,0,0,.24);
+  }
+  .locator-header-text{min-width:0}
+  .locator-brand{
+    margin-top:0;font-size:clamp(11px,3.3vw,15px);line-height:1.35;
+    letter-spacing:.055em;white-space:normal;
+  }
+  .locator-brand span{display:inline-block;white-space:nowrap}
+  .locator-subtitle{font-size:clamp(8px,2.45vw,10px);letter-spacing:.10em;line-height:1.5;margin-top:7px}
+  .locator-body{
+    margin-top:22px;max-width:560px;gap:16px;
+  }
+  .locator-live{
+    width:fit-content;max-width:100%;
+    min-height:39px;padding:9px 14px;border-radius:999px;
+    background:rgba(255,255,255,.035);
+    border:1px solid rgba(255,255,255,.13);
+    font-size:11px;letter-spacing:.025em;
+  }
+  .locator-live.ready{background:rgba(52,199,123,.095);border-color:rgba(52,199,123,.25)}
+  .locator-live.bad{background:rgba(255,109,109,.09);border-color:rgba(255,109,109,.25)}
+  .locator-primary-card{
+    min-height:205px;padding:24px 24px 27px;
+    border-radius:22px;border:1px solid rgba(255,209,109,.4);
+    background:linear-gradient(132deg,#ffb22b 0%,#f5a623 62%,#e99415 100%);
+    box-shadow:0 16px 36px rgba(0,0,0,.23),inset 0 1px 0 rgba(255,255,255,.20);
+    position:relative;overflow:hidden;
+  }
+  .locator-primary-card::before{
+    content:"";position:absolute;width:180px;height:180px;right:-105px;top:-107px;
+    border:32px solid rgba(255,255,255,.085);border-radius:50%;pointer-events:none;
+  }
+  .locator-primary-card::after{
+    content:"";position:absolute;left:24px;bottom:14px;width:40px;height:3px;
+    border-radius:4px;background:rgba(24,24,24,.55);pointer-events:none;
+  }
+  .locator-overline,.locator-primary,.locator-lane,.locator-segment{position:relative;z-index:1}
+  .locator-overline{font-size:10px;letter-spacing:.105em;opacity:.74}
+  .locator-primary{font-size:clamp(34px,9.25vw,52px);letter-spacing:-.046em;margin-top:10px;line-height:1.04}
+  .locator-primary.corridor{font-size:clamp(27px,7.3vw,39px)}
+  .locator-lane{font-size:clamp(17px,5vw,22px);margin-top:14px}
+  .locator-segment{font-size:12px;margin-top:8px;line-height:1.45}
+  .locator-section-heading{
+    display:flex;align-items:center;gap:9px;
+    margin-top:9px;font-size:10px;letter-spacing:.15em;
+    color:#e2e6ea;
+  }
+  .locator-section-heading::before{
+    content:"";width:4px;height:15px;border-radius:4px;background:#f5a623;flex:0 0 auto;
+  }
+  .locator-data-grid{gap:10px}
+  .locator-field{
+    min-height:98px;gap:12px;justify-content:center;
+    background:linear-gradient(145deg,#1d2228,#191d22);
+    border-color:rgba(255,255,255,.11);
+    border-radius:15px;padding:15px 14px;
+  }
+  .locator-field span{font-size:9.5px;letter-spacing:.06em;color:#aeb8c0}
+  .locator-field strong{font-size:clamp(13px,3.6vw,16px);font-variant-numeric:tabular-nums;line-height:1.3}
+  .locator-source-note{
+    min-height:58px;display:flex;align-items:center;gap:12px;
+    padding:10px 13px;border:1px solid rgba(255,255,255,.08);
+    border-radius:13px;background:rgba(255,255,255,.022);
+  }
+  .locator-source-icon{font-size:23px;color:#f5a623;line-height:1;flex:0 0 auto}
+  .locator-source-copy{display:flex;flex:1;flex-direction:column;min-width:0;gap:4px}
+  .locator-source-copy strong{font-size:9px;letter-spacing:.12em;color:#edf0f1}
+  .locator-source-copy span{font-size:10px;line-height:1.35;color:#aab3bb}
+  .locator-source-bars{display:flex;align-items:end;gap:3px;height:20px;opacity:.62}
+  .locator-source-bars i{width:3px;height:8px;background:#f5a623;border-radius:2px}
+  .locator-source-bars i:nth-child(2){height:13px}
+  .locator-source-bars i:nth-child(3){height:19px}
+  .locator-footer{margin-top:auto;gap:12px;padding-top:18px}
+  .locator-time{font-size:12px;letter-spacing:.04em;color:#edf0f1}
+  .locator-orientation-hint{
+    font-size:10.5px;color:#b2bbc2;
+    border-top:1px solid rgba(255,255,255,.08);
+    padding-top:14px;width:100%;
+  }
+}
+@media (orientation:portrait) and (max-width:365px){
+  .locator-view{padding-left:15px;padding-right:15px}
+  .locator-header{column-gap:11px;grid-template-columns:minmax(98px,37%) minmax(0,1fr)}
+  .locator-primary-card{padding:20px 18px 25px;min-height:175px}
+  .locator-primary-card::after{left:18px}
+  .locator-field{padding:12px 11px;min-height:89px}
+}
+@media (orientation:portrait) and (max-height:720px){
+  .locator-view{padding-top:calc(env(safe-area-inset-top) + 16px);padding-bottom:calc(env(safe-area-inset-bottom) + 14px)}
+  .locator-header{padding-bottom:14px}
+  .locator-body{margin-top:14px;gap:10px}
+  .locator-primary-card{min-height:163px;padding-top:16px;padding-bottom:19px}
+  .locator-primary{font-size:clamp(28px,8.3vw,41px)}
+  .locator-lane{margin-top:8px}
+  .locator-field{min-height:80px;gap:8px;padding:10px 12px}
+  .locator-section-heading{margin-top:4px}
+  .locator-source-note{min-height:48px;padding:7px 11px}
+  .locator-footer{padding-top:6px;gap:7px}
+}
+@media (orientation:landscape){
+  /* Touch the live scene to pinch; buttons and overlays remain touchable. */
+  #preview{touch-action:none;overscroll-behavior:contain}
+}
+
 </style>
 </head>
 
@@ -998,8 +1126,10 @@ canvas{display:none}
   <section class="locator-view" id="locatorView" aria-label="GPS Auto-STA Locator">
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
-      <div class="locator-brand">CMM GEOCAM <span>5.2.A</span></div>
-      <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
+      <div class="locator-header-text">
+        <div class="locator-brand">CMM GEOCAM <span>5.2.B</span></div>
+        <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
+      </div>
     </header>
 
     <div class="locator-body">
@@ -1023,6 +1153,15 @@ canvas{display:none}
         <div class="locator-field"><span>KECEPATAN</span><strong id="locatorSpeed">-- km/h</strong></div>
       </div>
 
+      <div class="locator-source-note" aria-label="Sumber referensi lokasi">
+        <span class="locator-source-icon" aria-hidden="true">◎</span>
+        <div class="locator-source-copy">
+          <strong>REFERENSI JARINGAN JALAN</strong>
+          <span>Alignment Ledger · Mainline & Corridor</span>
+        </div>
+        <span class="locator-source-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
+
       <div class="locator-footer">
         <div class="locator-time" id="locatorDateTime">--/--/---- --:--:--</div>
         <button type="button" id="locatorStartGPS" class="locator-gps-button">Aktifkan GPS Presisi</button>
@@ -1040,7 +1179,7 @@ canvas{display:none}
       </div>
 
       <div class="zoom-controls" role="group" aria-label="Zoom kamera">
-        <div class="zoom-label" id="zoomLabel">ZOOM · DIGITAL</div>
+        <div class="zoom-label" id="zoomLabel" aria-live="off">1.0× · DIGITAL</div>
         <div class="zoom-presets">
           <button type="button" class="zoom-btn active" data-zoom="1" aria-pressed="true">1×</button>
           <button type="button" class="zoom-btn" data-zoom="2" aria-pressed="false">2×</button>
@@ -1076,7 +1215,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.A";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.B";
 
 /* =========================================================
    CONFIG
@@ -2643,8 +2782,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.A"),
-        fetch("./Corridor_Tamer.csv?v=5.2.A")
+        fetch("./STA_Tamer.csv?v=5.2.B"),
+        fetch("./Corridor_Tamer.csv?v=5.2.B")
       ]);
 
     if(!staResponse.ok){
@@ -4301,17 +4440,18 @@ function zoomDigitalRatio(){
 
 function updateZoomUI(){
   document.querySelectorAll(".zoom-btn").forEach(button=>{
-    const active=Number(button.dataset.zoom)===zoomRequested;
+    const active=Math.abs(Number(button.dataset.zoom)-zoomRequested)<0.04;
     button.classList.toggle("active",active);
     button.setAttribute("aria-pressed",String(active));
   });
   const usesNative = zoomNativeCapabilities && zoomNativeApplied>1.01;
-  $("zoomLabel").textContent=usesNative
-    ? (zoomDigitalRatio()>1.01 ? "ZOOM · HYBRID" : "ZOOM · DEVICE")
-    : "ZOOM · DIGITAL";
+  const mode=usesNative
+    ? (zoomDigitalRatio()>1.01 ? "HYBRID" : "DEVICE")
+    : "DIGITAL";
+  $("zoomLabel").textContent=`${zoomRequested.toFixed(2).replace(/0$/, "")}× · ${mode}`;
 
-  // The <video> element uses object-fit:cover. CSS magnification therefore
-  // matches the centered software crop that drawCameraFrame() uses.
+  // Native camera zoom modifies the input track. Canvas renders the same
+  // remaining centered digital crop used in the onscreen preview.
   const previewScale=zoomDigitalRatio() * (isGyroEISActive()?1/EIS_CROP_RATIO:1);
   $("preview").style.transform=`scale(${previewScale.toFixed(5)})`;
 }
@@ -4343,8 +4483,10 @@ function detectCameraZoom(track){
 }
 
 function setCameraZoom(level){
-  if(![1,2,4].includes(level)) return;
-  zoomRequested=level;
+  if(!Number.isFinite(level)) return;
+  // Gestures support smooth intermediate levels; preset buttons still
+  // jump directly to exactly 1x, 2x and 4x.
+  zoomRequested=Math.min(4,Math.max(1,Math.round(level*20)/20));
   updateZoomUI();
   requestCameraZoom();
 }
@@ -5860,6 +6002,42 @@ document.querySelectorAll(".zoom-btn").forEach(button=>{
   button.addEventListener("click",()=>setCameraZoom(Number(button.dataset.zoom)));
 });
 
+/* ============================================================
+   5.2.B — Two-finger continuous pinch-to-zoom (1.0x .. 4.0x)
+
+   Gestures are bound ONLY to the camera preview, so they cannot
+   activate shutter, mode selector, watermark or weather dropdown.
+   Native zoom is applied when exposed by the device; the remaining
+   digital crop is shared by photo and video rendering.
+   ============================================================ */
+let pinchGesture=null;
+function twoTouchDistance(touches){
+  if(touches.length<2) return 0;
+  const dx=touches[0].clientX-touches[1].clientX;
+  const dy=touches[0].clientY-touches[1].clientY;
+  return Math.hypot(dx,dy);
+}
+$("preview").addEventListener("touchstart",event=>{
+  if(!isLandscapeMode() || !mediaStream || event.touches.length!==2) return;
+  const distance=twoTouchDistance(event.touches);
+  if(distance<12) return;
+  pinchGesture={distance,zoom:zoomRequested};
+  // Prevent mobile browser page magnification during camera gestures.
+  if(event.cancelable) event.preventDefault();
+},{passive:false});
+$("preview").addEventListener("touchmove",event=>{
+  if(!pinchGesture || event.touches.length!==2) return;
+  if(event.cancelable) event.preventDefault();
+  const next=pinchGesture.zoom * twoTouchDistance(event.touches)/pinchGesture.distance;
+  setCameraZoom(next);
+},{passive:false});
+function stopPinch(event){
+  if(event.touches.length<2) pinchGesture=null;
+}
+$("preview").addEventListener("touchend",stopPinch,{passive:true});
+$("preview").addEventListener("touchcancel",()=>{pinchGesture=null;},{passive:true});
+
+
 
 $("photoModeBtn").addEventListener(
   "click",
@@ -5976,6 +6154,7 @@ $("diagPanel").addEventListener(
    - user harus kembali ke landscape untuk recording berikutnya
 ========================================================= */
 function handleOrientationChange(){
+  pinchGesture=null;
   resetGyroFilter();
 
   if(isLandscapeMode()){
@@ -6034,7 +6213,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.A")
+        .register("./service-worker.js?v=5.2.B")
         .catch(console.error);
     }
   );

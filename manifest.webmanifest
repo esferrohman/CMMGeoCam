@@ -1,7 +1,7 @@
 {
-  "name": "CMM GeoCam 5.2.A",
+  "name": "CMM GeoCam 5.2.B",
   "short_name": "CMM GeoCam",
-  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom 1x/2x/4x, Road Network, dan dokumentasi foto/video ber-watermark",
+  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom kontinu pinch 1x-4x + preset 1x/2x/4x, Road Network, dan dokumentasi foto/video ber-watermark",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

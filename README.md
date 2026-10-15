@@ -1,3 +1,19 @@
+# CMM GeoCam 5.2.B — Portrait Dashboard + Pinch Zoom
+
+## Pembaruan 5.2.B
+- Auto-STA portrait: tata letak header/logo lebih ringkas, hierarki kartu STA lebih kuat, telemetry grid lebih seimbang, teks sumber database, jarak lebih teratur.
+- GeoCam landscape: pinch-to-zoom dua jari pada area preview kamera dari 1.0x sampai 4.0x (step 0.05x).
+- Preset 1x / 2x / 4x tetap tersedia.
+- Nilai zoom kontinu ditampilkan langsung di panel; tombol preset menandai nilai tepat saja.
+- Tetap menggunakan native camera zoom bila diekspos browser; selebihnya digital crop yang sama untuk preview, foto dan video.
+- Matching STA, corridor, jalur A/B, weather, stabilisasi, dan rolling recording tidak diubah.
+- Portrait mode khusus informasi Auto-STA; photo/video tetap landscape.
+
+## Catatan uji perangkat
+Pinch bekerja saat dua jari dimulai di AREA GAMBAR kamera (bukan tombol atau watermark). Zoom 4x digital dapat mengurangi detail visual. Ketersediaan native zoom dan respons EIS berbeda antar perangkat/browser; uji langsung di smartphone.
+
+---
+
 # CMM GeoCam
 
 **Geo-Referenced Visual Inspection PWA**  
