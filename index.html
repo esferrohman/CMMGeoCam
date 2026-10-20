@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.C</title>
+<title>CMM GeoCam 5.2.D</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1053,6 +1053,12 @@ canvas{display:none}
  .topbar{gap:5px}
  .topbar .pill{padding:5px 8px}
 }
+
+/* 5.2.D: keep long-session archives readable. */
+.archive-part-details{margin-top:10px;color:#c6d0d9;font-size:11px}
+.archive-part-details summary{cursor:pointer;padding:8px 1px;user-select:none}
+.archive-part-details .archive-segments{max-height:150px;overflow-y:auto}
+.archive-download-ready.primary-video-download{border:2px solid #fff;box-shadow:0 3px 10px rgba(245,166,35,.28);font-weight:900}
 </style>
 </head>
 
@@ -1179,7 +1185,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.2.C</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.2.D</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1267,9 +1273,9 @@ canvas{display:none}
          <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
          <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
        </div>
-       <p class="archive-intro">Setiap segmen 2 menit disimpan terlebih dahulu di perangkat (IndexedDB). Pilih <b>Siapkan ZIP</b>, lalu tekan <b>Unduh ZIP</b> untuk menyimpan seluruh segmen sesi dalam satu berkas.</p>
+       <p class="archive-intro"><b>Versi 5.2.D:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah rekaman selesai, pilih <b>Siapkan Video Utuh</b> → <b>Unduh Video</b> untuk satu MP4 (jika didukung) atau WebM. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
        <div class="archive-list" id="archiveList">Memuat rekaman...</div>
-       <div class="archive-bottom">Jangan hapus data situs/browser sebelum rekaman diekspor dan diverifikasi. ZIP berisi file video terpisah, bukan satu video yang digabung. Jika layar terkunci atau aplikasi ditinggalkan, perekaman akan dihentikan untuk melindungi segmen terakhir.</div>
+       <div class="archive-bottom">Jangan hapus data browser sebelum hasil berhasil diunduh dan diputar sampai akhir. Browser MP4 dapat menahan sebagian besar data hingga STOP; tutup paksa sebelum STOP masih berisiko kehilangan video. Blok checkpoint belum tentu bisa diputar sendiri. Saat aplikasi masuk background, sistem mencoba memfinalisasi rekaman.</div>
      </section>
    </div>
    <canvas id="captureCanvas"></canvas>
@@ -1279,7 +1285,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.C";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.D";
 
 /* =========================================================
    CONFIG
@@ -1417,13 +1423,14 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-  Prototype 12.3 rolling-finalized recording.
-
-  The UI remains one continuous REC session, but MediaRecorder
-  finalizes a separate file every 2 minutes. This bounds memory and
-  gives every MP4 its own container finalization / seek metadata.
+  Prototype 5.2.D: ONE continuous MediaRecorder with periodic checkpoints.
+  requestData() flushes browser-provided chunks into IndexedDB without
+  stopping the encoder. Concatenating all chunks from this SAME recorder
+  produces one playable file according to the MediaRecorder data contract.
+  IMPORTANT: a checkpoint is NOT guaranteed to play in isolation.
 */
-const VIDEO_SEGMENT_MS = 120000;
+const VIDEO_SEGMENT_MS = 30000; // 30-second crash-exposure window
+const VIDEO_EXPORT_MAX_BYTES = 3.8 * 1024 * 1024 * 1024;
 
 let recordingSessionActive = false;
 let recordingCanvasStream = null;
@@ -5662,9 +5669,9 @@ function prettyBytes(bytes){
 }
 function niceArchiveDate(ms){return new Date(ms).toLocaleString("id-ID",{hour12:false});}
 function archiveSafeName(segment){
-  const extension=String(segment.mime||"").toLowerCase().includes("mp4")?"mp4":"webm";
+  const extension=segment.continuousChunk ? "part" : (String(segment.mime||"").toLowerCase().includes("mp4")?"mp4":"webm");
   const index=String(segment.segmentIndex).padStart(3,"0");
-  return `CMMGeoCam_VIDEO_SEG${index}_${safeToken(segment.startContext)||"LOCATION"}_TO_${safeToken(segment.endContext)||"LOCATION"}_${segment.startStamp}.${extension}`;
+  return `CMMGeoCam_${segment.continuousChunk?"DATA_BLOK":"VIDEO_SEG"}${index}_${safeToken(segment.startContext)||"LOCATION"}_TO_${safeToken(segment.endContext)||"LOCATION"}_${segment.startStamp}.${extension}`;
 }
 function revokeArchiveURLs(){
   for(const url of archiveObjectURLs) URL.revokeObjectURL(url);
@@ -5689,7 +5696,8 @@ function archiveDownloadLink(blob,filename,label){
   return a;
 }
 function archiveZipMeta(session,segments){
-  return `CMM GeoCam 5.2.C\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nSegmen tersimpan: ${segments.length}\nDurasi total tersimpan (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat memulai capture\n\nArsip ZIP berisi beberapa file video terpisah. File tidak digabung otomatis.\nMohon periksa semua segmen sebelum menghapus arsip lokal.\n`;
+  const isContinuous=session.recordingMode==="continuous";
+  return `CMM GeoCam 5.2.D\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
 }
 /* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
    memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
@@ -5759,14 +5767,108 @@ async function prepareVideoZip(session,segments,button,actions){
     const files=segments.map(seg=>({blob:seg.blob,name:archiveSafeName(seg),date:seg.startedAt}));
     files.push({blob:new Blob([archiveZipMeta(session,segments)],{type:"text/plain"}),name:"INFO_REKAMAN.txt",date:Date.now()});
     const blob=await buildVideoZip(files,(current,total)=>{button.textContent=`Menyiapkan ZIP ${current}/${total}...`;});
-    const download=archiveDownloadLink(blob,`${safeToken(session.id)}_REKAMAN.zip`,`Unduh ZIP · ${prettyBytes(blob.size)}`);
+    const download=archiveDownloadLink(blob,`${safeToken(session.id)}_CADANGAN.zip`,`Unduh ZIP · ${prettyBytes(blob.size)}`);
     actions.appendChild(download);
     button.textContent="ZIP siap ✓";
-    toast("ZIP siap. Tekan Unduh ZIP untuk menyimpan file.");
+    toast("ZIP cadangan siap. Tekan Unduh ZIP untuk menyimpan.");
   }catch(err){
     button.disabled=false;
     button.textContent="Ulangi Siapkan ZIP";
     toast("ZIP gagal: "+(err.message||err));
+  }
+}
+
+/* ============================================================
+   5.2.D — ONE-FILE EXPORT (no transcode / no third-party library)
+   Every Blob MUST be a sequential dataavailable payload from the SAME
+   uninterrupted MediaRecorder. This is forbidden for old 5.2.C files,
+   which came from separate recorder instances and independent MP4 headers.
+   MediaRecorder spec: all Blobs of a completed session, in order, must
+   be playable when combined. Individual checkpoints need not be playable.
+============================================================ */
+function videoMimeExtension(mime){
+  return /mp4/i.test(mime||"") ? "mp4" : /webm/i.test(mime||"") ? "webm" : null;
+}
+function videoNameForSession(session,mime){
+  const ext=videoMimeExtension(mime);
+  return `CMMGeoCam_VIDEO_UTUH_${safeToken(session.id)}.${ext}`;
+}
+function buildWholeRecordingBlob(session,parts){
+  if(session.recordingMode!=="continuous"){
+    throw new Error("Arsip versi lama berisi MP4 terpisah; tidak boleh disambung langsung. Gunakan ZIP.");
+  }
+  if(session.status!=="completed"){
+    throw new Error("Sesi belum difinalisasi normal. Gunakan ZIP cadangan dan periksa potongan.");
+  }
+  if(!parts.length){throw new Error("Tidak ada data video.");}
+  const mime=parts[0].mime || session.mime || "";
+  const ext=videoMimeExtension(mime);
+  if(!ext){throw new Error("Format kontainer video tidak diketahui.");}
+  let total=0;
+  for(let i=0;i<parts.length;i++){
+    const p=parts[i];
+    if(p.segmentIndex!==i+1){
+      throw new Error(`Potongan data ${i+1} hilang atau urutan tidak sesuai.`);
+    }
+    if(!p.blob || !p.blob.size){throw new Error(`Potongan ${i+1} kosong.`);}
+    if(videoMimeExtension(p.mime||mime)!==ext){
+      throw new Error("Format potongan berubah selama perekaman.");
+    }
+    total+=p.blob.size;
+  }
+  if(total>VIDEO_EXPORT_MAX_BYTES){
+    throw new Error("Video terlalu besar untuk ekspor satu file di browser ini. Gunakan ZIP cadangan.");
+  }
+  return {blob:new Blob(parts.map(p=>p.blob),{type:mime}),mime};
+}
+async function probeWholeVideo(blob){
+  // This is a smoke check, NOT a substitute for playback validation on HP.
+  const url=URL.createObjectURL(blob);
+  const video=document.createElement("video");
+  video.preload="metadata";
+  video.muted=true;
+  video.playsInline=true;
+  try{
+    return await new Promise(resolve=>{
+      let done=false;
+      const finish=(status,duration)=>{
+        if(done)return;
+        done=true;
+        clearTimeout(timer);
+        video.removeAttribute("src");
+        video.load();
+        resolve({status,duration});
+      };
+      const timer=setTimeout(()=>finish("timeout",null),9000);
+      video.onloadedmetadata=()=>finish("ok",video.duration);
+      video.onerror=()=>finish("error",null);
+      video.src=url;
+    });
+  }finally{URL.revokeObjectURL(url);}
+}
+async function prepareWholeVideo(session,parts,button,actions){
+  button.disabled=true;
+  button.textContent="Menyiapkan Video...";
+  try{
+    const {blob,mime}=buildWholeRecordingBlob(session,parts);
+    button.textContent="Memeriksa format...";
+    const result=await probeWholeVideo(blob);
+    const link=archiveDownloadLink(blob,videoNameForSession(session,mime),
+      `Unduh Video Utuh (.${videoMimeExtension(mime)}) · ${prettyBytes(blob.size)}`);
+    link.classList.add("primary-video-download");
+    actions.insertBefore(link,actions.firstChild);
+    button.textContent="Video siap ✓";
+    const durationNote=document.createElement("div");
+    durationNote.className="archive-notice";
+    durationNote.textContent=result.status==="ok"
+      ? `Video dikenali browser. Durasi metadata: ${Number.isFinite(result.duration)?Math.round(result.duration)+" detik":"tidak tersedia"}. Setelah unduh, verifikasi pemutaran dari awal sampai akhir.`
+      : `Pemeriksaan metadata ${result.status==="timeout"?"melewati waktu":"tidak berhasil"}; file tetap tersedia. Uji pemutaran setelah unduh sebelum menghapus arsip.`;
+    actions.appendChild(durationNote);
+    toast("Video utuh siap. Tekan Unduh Video, lalu periksa durasinya.");
+  }catch(error){
+    button.disabled=false;
+    button.textContent="Ulangi Siapkan Video";
+    toast("Video utuh belum siap: "+(error.message||error));
   }
 }
 async function renderArchivePanel(){
@@ -5780,48 +5882,63 @@ async function renderArchivePanel(){
     sessions.sort((a,b)=>b.startedAt-a.startedAt);
     if(!sessions.length && !emergencySegments.length){
       const none=document.createElement("div");none.className="archive-empty";
-      none.textContent="Belum ada rekaman tersimpan. Segmen akan muncul setelah mencapai 2 menit atau setelah REC dihentikan.";
+      none.textContent="Belum ada rekaman. Setelah REC, potongan data disimpan tiap 30 detik dan file utuh siap diekspor sesudah STOP.";
       container.appendChild(none);
     }
     for(const session of sessions){
       const matches=segments.filter(seg=>seg.sessionId===session.id).sort((a,b)=>a.segmentIndex-b.segmentIndex);
+      const continuous=session.recordingMode==="continuous";
       const entry=document.createElement("div");entry.className="archive-session";
       const title=document.createElement("div");title.className="archive-session-title";
-      title.textContent=`${niceArchiveDate(session.startedAt)} · ${matches.length} segmen`;
+      title.textContent=`${niceArchiveDate(session.startedAt)} · ${matches.length} ${continuous?"potongan data":"segmen lama"}`;
       const meta=document.createElement("div");meta.className="archive-session-note";
       const status=session.status==="recording" ? "TERPUTUS / MASIH AKTIF" : session.status==="storage-error" ? "ERROR SIMPAN" : "SELESAI";
-      meta.textContent=`Status: ${status} · ${prettyBytes(matches.reduce((n,x)=>n+x.blob.size,0))} · ${Math.round(matches.reduce((n,x)=>n+x.durationMs,0)/1000)} detik`;
+      meta.textContent=`Status: ${status} · ${prettyBytes(matches.reduce((n,x)=>n+x.blob.size,0))} · ${Math.round(matches.reduce((n,x)=>n+x.durationMs,0)/1000)} detik · ${continuous?"Satu stream":"Video terpisah"}`;
       entry.append(title,meta);
       const list=document.createElement("div");list.className="archive-segments";
-      for(const segment of matches){
+      for(const part of matches){
         const row=document.createElement("div");row.className="archive-segment";
-        const name=document.createElement("span");name.textContent=`Seg ${segment.segmentIndex} · ${Math.round(segment.durationMs/1000)} dtk · ${prettyBytes(segment.blob.size)}`;
-        const download=archiveDownloadLink(segment.blob,archiveSafeName(segment),"Unduh");
-        row.append(name,download);list.appendChild(row);
+        const name=document.createElement("span");name.textContent=`${continuous?"Blok":"Seg"} ${part.segmentIndex} · ${Math.round(part.durationMs/1000)} dtk · ${prettyBytes(part.blob.size)}`;
+        row.appendChild(name);
+        if(!continuous) row.appendChild(archiveDownloadLink(part.blob,archiveSafeName(part),"Unduh"));
+        list.appendChild(row);
       }
-      entry.appendChild(list);
+      if(continuous){
+        const details=document.createElement("details");details.className="archive-part-details";
+        const summary=document.createElement("summary");summary.textContent=`Lihat rincian ${matches.length} blok data`;
+        details.append(summary,list);entry.appendChild(details);
+      }else{entry.appendChild(list);}
       const actions=document.createElement("div");actions.className="archive-actions";
       if(matches.length){
-        const button=createArchiveButton("Siapkan ZIP", "primary",()=>prepareVideoZip(session,matches,button,actions));
-        actions.appendChild(button);
+        if(continuous){
+          const button=createArchiveButton("Siapkan Video Utuh", "primary",()=>prepareWholeVideo(session,matches,button,actions));
+          actions.appendChild(button);
+        }
+        const zipButton=createArchiveButton(continuous?"ZIP Cadangan":"Siapkan ZIP",continuous?"":"primary",()=>prepareVideoZip(session,matches,zipButton,actions));
+        actions.appendChild(zipButton);
       }
       const deleteButton=createArchiveButton("Hapus Arsip","danger",async()=>{
         if(activeRecordingSession && activeRecordingSession.id===session.id){toast("Hentikan REC sebelum menghapus sesi ini.");return;}
-        if(!window.confirm(`Hapus permanen ${matches.length} segmen dari arsip lokal? Pastikan sudah diunduh.`)) return;
+        if(!window.confirm(`Hapus permanen ${matches.length} ${continuous?"potongan":"segmen"} dari arsip lokal? Pastikan video sudah diunduh dan diputar.`)) return;
         deleteButton.disabled=true;
         try{await archiveDeleteSession(session.id);await renderArchivePanel();}
         catch(err){toast("Hapus gagal: "+(err.message||err));deleteButton.disabled=false;}
       });
       actions.appendChild(deleteButton);
       entry.appendChild(actions);container.appendChild(entry);
+      if(continuous && session.status!=="completed"){
+        const warning=document.createElement("div");warning.className="archive-notice";
+        warning.textContent="Sesi ini tidak selesai normal. Potongan mentah dicadangkan tetapi file utuh belum dijamin valid.";
+        entry.appendChild(warning);
+      }
     }
     if(emergencySegments.length){
       const emergency=document.createElement("div");emergency.className="archive-session";
       const warning=document.createElement("div");warning.className="archive-notice";
-      warning.textContent="PENTING: Penyimpanan lokal gagal. Segmen berikut hanya berada di memori sementara. Unduh SEKARANG sebelum menutup aplikasi.";
+      warning.textContent="PENTING: Penyimpanan lokal gagal. Potongan berikut ada di RAM sementara. Jangan tutup aplikasi. Jika stream tidak lengkap, video mungkin tidak bisa diputar.";
       emergency.appendChild(warning);
-      for(const segment of emergencySegments){
-        const link=archiveDownloadLink(segment.blob,archiveSafeName(segment),`Unduh darurat segmen ${segment.segmentIndex}`);
+      for(const part of emergencySegments){
+        const link=archiveDownloadLink(part.blob,archiveSafeName(part),`Unduh darurat blok ${part.segmentIndex}`);
         emergency.appendChild(link);
       }
       container.prepend(emergency);
@@ -5871,7 +5988,7 @@ async function finishRecordingToArchive(){
   updateArchiveCounters();
   const outcome=recordingSaveError
     ? "Penyimpanan bermasalah. Buka ARSIP VIDEO untuk pemulihan!"
-    : "Rekaman tersimpan di ARSIP VIDEO. Ekspor ZIP sebelum menghapus data browser.";
+    : "Video tersimpan di ARSIP. Pilih Siapkan Video Utuh, lalu Unduh Video.";
   toast(outcome);
   if(archiveOpen) renderArchivePanel();
   recordingFinishing=false;
@@ -6007,6 +6124,7 @@ function cleanupRecordingSession(){
 
   recordingCanvasStream=null;
   recordingVideoFormat=null;
+  mediaRecorder=null;
 
   videoCanvasTrack=null;
   videoUsesManualFrames=false;
@@ -6032,40 +6150,20 @@ function cleanupRecordingSession(){
 }
 
 function scheduleNextRecordingSegment(){
+  // Checkpoint every 30 seconds. Do NOT stop/restart MediaRecorder.
   clearRecordingSegmentTimer();
-
-  if(!recordingSessionActive){
-    return;
-  }
-
-  recordingSegmentTimer=
-    setTimeout(
-      ()=>{
-        if(
-          recordingSessionActive &&
-          mediaRecorder &&
-          mediaRecorder.state==="recording"
-        ){
-          /*
-            Do NOT end the overall REC session.
-            Stop only this MediaRecorder instance so the container
-            is finalized. onstop starts the next segment.
-          */
-          recorderStopPending=true;
-          mediaRecorder.stop();
-        }
-      },
-      VIDEO_SEGMENT_MS
-    );
+  if(!recordingSessionActive) return;
+  recordingSegmentTimer=setTimeout(()=>{
+    if(recordingSessionActive && mediaRecorder && mediaRecorder.state==="recording"){
+      try{mediaRecorder.requestData();}
+      catch(error){console.warn("Checkpoint video:",error);}
+    }
+    if(recordingSessionActive) scheduleNextRecordingSegment();
+  },VIDEO_SEGMENT_MS);
 }
 
-function startRecorderSegment(){
-  if(!recordingSessionActive || !recordingCanvasStream || !recordingVideoFormat) return;
-  const segmentIndex=++recordingSegmentIndex;
-  const startedAt=Date.now();
-  const startStamp=filenameTimestampFromDate(new Date(startedAt));
-  const startContext=currentContextForFilename();
-  const chunks=[]; // per-recorder closure: cannot be overwritten by the next segment
+function startContinuousRecorder(){
+  if(!recordingSessionActive || !recordingCanvasStream || !recordingVideoFormat)return;
   let recorder;
   try{
     recorder=new MediaRecorder(recordingCanvasStream,
@@ -6075,21 +6173,38 @@ function startRecorderSegment(){
   }catch(error){
     recordingSaveError=error;
     recordingSessionActive=false;
-    toast("MediaRecorder gagal. Segmen sebelumnya tetap berada di arsip.");
+    toast("MediaRecorder gagal. Data sebelumnya tetap di arsip.");
     finishRecordingToArchive();
     return;
   }
   mediaRecorder=recorder;
   recorderStopPending=false;
+  let lastCheckpointAt=Date.now();
+  const streamMime=recorder.mimeType || recordingVideoFormat.mime || "video/webm";
+  if(activeRecordingSession)activeRecordingSession.mime=streamMime;
   recorder.ondataavailable=event=>{
-    if(event.data && event.data.size>0) chunks.push(event.data);
+    if(!event.data || event.data.size===0) return;
+    const endTime=Date.now();
+    const segmentIndex=++recordingSegmentIndex;
+    const startedAt=lastCheckpointAt;
+    lastCheckpointAt=endTime;
+    // One recorder, one stream. Parts must stay in exactly this order.
+    queueSegmentPersistence({
+      id:`${activeRecordingSession?.id||"REC"}_${String(segmentIndex).padStart(4,"0")}`,
+      sessionId:activeRecordingSession?.id||"REC",
+      segmentIndex,startedAt,endTime,durationMs:endTime-startedAt,
+      startStamp:filenameTimestampFromDate(new Date(startedAt)),
+      startContext:recordingContextForFilename,endContext:currentContextForFilename(),
+      continuousChunk:true,mime:streamMime,blob:event.data
+    });
   };
   recorder.onerror=event=>{
     recordingSaveError=event.error||new Error("MediaRecorder error");
     updateArchiveCounters();
     recordingSessionActive=false;
+    clearRecordingSegmentTimer();
     try{
-      if(recorder.state==="recording"){
+      if(recorder.state!=="inactive"){
         recorderStopPending=true;
         recorder.stop();
       }else if(!recorderStopPending){
@@ -6100,39 +6215,20 @@ function startRecorderSegment(){
   recorder.onstop=()=>{
     recorderStopPending=false;
     clearRecordingSegmentTimer();
-    const endTime=Date.now();
-    const actualMime=recorder.mimeType || recordingVideoFormat?.mime || "video/webm";
-    const blob=new Blob(chunks,{type:actualMime});
-    if(blob.size>0){
-      queueSegmentPersistence({
-        id:`${activeRecordingSession?.id||"REC"}_${String(segmentIndex).padStart(4,"0")}`,
-        sessionId:activeRecordingSession?.id||"REC",
-        segmentIndex,startedAt,endTime,durationMs:endTime-startedAt,
-        startStamp,startContext,endContext:currentContextForFilename(),
-        mime:actualMime,blob
-      });
-    }else{
-      recordingSaveError=new Error(`Segmen ${segmentIndex} kosong.`);
-      updateArchiveCounters();
-      recordingSessionActive=false;
-      toast("Perekaman menghasilkan segmen kosong. Periksa kamera dan arsip.");
+    if(recordingSegmentIndex===0){
+      recordingSaveError=recordingSaveError||new Error("Perekaman tidak menghasilkan data.");
     }
-    // Start next segment immediately. Disk write runs independently in its
-    // serial queue; no browser download or confirmation popup at this point.
-    if(recordingSessionActive){
-      startRecorderSegment();
-    }else{
-      finishRecordingToArchive();
-    }
+    recordingSessionActive=false;
+    finishRecordingToArchive();
   };
   try{
-    recorder.start();
+    recorder.start(); // NEVER rotate recorder until user stops.
     scheduleNextRecordingSegment();
   }catch(error){
     recordingSaveError=error;
     recordingSessionActive=false;
     finishRecordingToArchive();
-    toast("Gagal memulai rekaman. Periksa Arsip Video.");
+    toast("Gagal memulai rekaman. Periksa arsip video.");
   }
 }
 
@@ -6235,8 +6331,8 @@ async function startVideoRecording(){
     recordingFinishing=false;
     recorderStopPending=false;
     activeRecordingSession={id:recordingSessionId(),startedAt:Date.now(),
-      endedAt:null,updatedAt:Date.now(),status:"recording",segmentCount:0,
-      savedDurationMs:0,totalBytes:0};
+      endedAt:null,updatedAt:Date.now(),status:"recording",recordingMode:"continuous",
+      mime:recordingVideoFormat.mime,segmentCount:0,savedDurationMs:0,totalBytes:0};
     await archivePutSession(activeRecordingSession);
   }catch(error){
     activeRecordingSession=null;
@@ -6282,11 +6378,11 @@ async function startVideoRecording(){
   compositeVideoFrame();
   scheduleVideoFrames();
 
-  startRecorderSegment();
+  startContinuousRecorder();
   syncScreenWakeLock();
 
   toast(
-    "Video 720p · rolling 2 menit · " +
+    "Video 720p · satu stream · checkpoint 30 dtk · " +
     (
       videoUsesManualFrames
         ? "manual frame sync"
@@ -6301,7 +6397,7 @@ async function startVideoRecording(){
     ) +
     " · " +
     recordingVideoFormat.label +
-    " · finalized segment · " +
+    " · single-file export · " +
     stabilizerMode
   );
 }
