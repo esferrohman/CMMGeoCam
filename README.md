@@ -17,7 +17,9 @@ Fitur arsip **Siapkan Video Utuh → Unduh Video** menghasilkan satu file MP4 ji
 ## Cara menggunakan
 
 1. Timpa berkas pada repo HTTPS yang sama dengan paket 5.2.D. Jangan pindah domain/origin bila ingin mempertahankan arsip IndexedDB lama.
-2. Tutup aplikasi, buka ulang, lalu pastikan label **CMM GEOCAM 5.2.D** muncul di mode portrait.
+2. Tutup aplikasi, buka ulang, lalu pastikan label **CMM GEOCAM 5.2.D** muncul di mode portrait. Pastikan juga file `service-worker.js` ikut ditimpa pada direktori publikasi yang sama, bukan hanya `index.html`.
+3. Jika masih 5.2.C, coba URL yang sama dalam mode samaran Chrome. Jika samaran juga 5.2.C, periksa deploy GitHub Pages (branch/folder dan status Actions), bukan hanya cache perangkat.
+4. **Jangan memilih Hapus data situs / Clear storage saat masih ada arsip video di IndexedDB yang belum diekspor** karena tindakan tersebut dapat menghapus arsip lokal.
 3. Putar perangkat ke landscape, tekan Mulai Kamera. Saat `LAYAR: AKTIF`, permintaan Screen Wake Lock telah berhasil; jika gagal OS masih bisa mematikan layar.
 4. Tunggu `READY` untuk memulai REC, rekam 9–10 menit, tekan STOP, lalu tunggu notifikasi finalisasi arsip.
 5. Tekan **ARSIP VIDEO → Siapkan Video Utuh → Unduh Video Utuh**.

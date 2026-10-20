@@ -2874,8 +2874,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.C"),
-        fetch("./Corridor_Tamer.csv?v=5.2.C")
+        fetch("./STA_Tamer.csv?v=5.2.D"),
+        fetch("./Corridor_Tamer.csv?v=5.2.D")
       ]);
 
     if(!staResponse.ok){
@@ -6683,7 +6683,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.C")
+        .register("./service-worker.js?v=5.2.D")
         .catch(console.error);
     }
   );
