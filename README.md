@@ -1,4 +1,41 @@
-# CMM GeoCam 5.2.B — Portrait Dashboard + Pinch Zoom
+# CMM GeoCam 5.2.C — Screen Wake Lock + Arsip Rekaman Lokal
+
+
+## Pembaruan 5.2.C (20 Oktober 2026)
+
+### Prioritas 1: Screen Wake Lock
+- Saat kamera aktif di landscape, aplikasi meminta izin **Screen Wake Lock** dari browser agar layar tidak mati karena timeout biasa.
+- Label `LAYAR: AKTIF` menandakan Wake Lock berhasil. `LAYAR: GAGAL`/`TIDAK DIDUKUNG` berarti fitur tidak tersedia dan layar mungkin tetap mati.
+- Saat beralih ke portrait, aplikasi dibawa ke background, atau tab disembunyikan, Wake Lock dilepaskan.
+- Saat halaman kembali terlihat di landscape dan kamera aktif, Wake Lock diminta ulang.
+- Jika halaman tersembunyi ketika merekam, sesi REC dihentikan secara aman agar segmen terakhir bisa difinalisasi. Pengguna perlu memeriksa Arsip Video.
+- Wake Lock tidak dapat menjamin rekaman berjalan bila browser, OS, panggilan telepon, mode hemat daya, atau perangkat memutus proses.
+
+### Prioritas 2: Arsip lokal & ekspor manual video
+- Perekaman masih memakai segmen **maksimum 2 menit** dan komposit watermark yang sama.
+- Setiap segmen yang selesai difinalisasi oleh MediaRecorder lalu **disimpan atomik di IndexedDB** bersama metadata sesi.
+- **Tidak ada unduhan otomatis setiap 2 menit**. Tombol **ARSIP VIDEO** menampilkan daftar sesi, segmen, durasi, dan ukuran. Arsip dapat dibuka dari portrait ataupun landscape.
+- Setelah stop, tekan **ARSIP VIDEO → Siapkan ZIP → Unduh ZIP**. Satu ZIP berisi seluruh video sesi secara terpisah serta `INFO_REKAMAN.txt`.
+- Bisa mengunduh video satu per satu. Jika perekaman/browser terhenti mendadak, segmen yang telah disimpan tetap ada untuk diekspor saat membuka aplikasi lagi.
+- Saat penyimpanan lokal gagal (mis. kuota penuh), perekaman dihentikan dan segmen yang gagal masih ditawarkan untuk unduhan darurat selama aplikasi belum ditutup.
+- Segmen yang belum mencapai proses `onstop`/finalisasi saat browser crash **tidak dijamin pulih**. Uji rekaman panjang diperlukan di perangkat asli.
+- Tidak ada fungsi penyatuan segmen otomatis; ZIP hanya mengumpulkan file individual.
+- Jangan menghapus data situs (Clear Storage/Cache & Site Data), melepas aplikasi PWA, atau memakai mode incognito sebelum ekspor dan verifikasi berkas.
+- Penyimpanan besar memerlukan ruang kosong yang cukup; pemrosesan ZIP besar memerlukan waktu. ZIP tunggal mendukung hingga batas ZIP32 ~4 GB, selebihnya unduh per segmen.
+
+### GPS dan fitur existing
+- `MAX_GPS_ACCURACY = 25` m. Ini adalah gate estimasi akurasi GPS, **bukan** bukti deviasi STA terhadap Ledger ≤25 m.
+- GPS LOW sebelum REC memblokir capture, namun GPS LOW selama REC tidak otomatis menghentikan rekaman.
+- Mainline JALUR A/B masih memakai bearing kendaraan/tren STA pada build ini. Pemisahan berdasarkan database spasial Jalur A/B menunggu data alignment dua jalur dari Inspector.
+- Pinch zoom 1×–4×, preset zoom, kamera, foto, watermark, mainline/corridor, dan cuaca dipertahankan.
+
+### Cara uji lapangan
+1. Pasang semua file 5.2.C ke repo HTTPS yang sama. Reload PWA sampai judul 5.2.C muncul.
+2. Putar ke landscape dan aktifkan kamera. Periksa label `LAYAR: AKTIF` (atau laporkan jika tidak didukung).
+3. Saat status lokasi READY, rekam selama lebih dari 9 menit tanpa menyentuh layar. Hindari berpindah tab/portrait selama REC.
+4. Hentikan REC. Buka ARSIP VIDEO, pastikan ada kurang lebih 5 segmen dengan durasi total mendekati durasi REC.
+5. Siapkan ZIP, unduh ZIP satu kali, dan **cek semua file SEG001...SEG005 bisa diputar** sebelum menghapus arsip lokal.
+6. Uji sekali lagi dengan mengunci layar/memindah aplikasi ke background untuk memastikan penghentian dan pemulihan segmen terakhir sesuai desain.
 
 ## Pembaruan 5.2.B
 - Auto-STA portrait: tata letak header/logo lebih ringkas, hierarki kartu STA lebih kuat, telemetry grid lebih seimbang, teks sumber database, jarak lebih teratur.
@@ -385,4 +422,4 @@ Jalankan sebagai static website/PWA; membuka HTML via `file://` tidak cukup.
 
 ---
 
-**Current development branch:** Prototype 5.2.A
+**Current development branch:** Prototype 5.2.C

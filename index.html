@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.B</title>
+<title>CMM GeoCam 5.2.C</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1003,6 +1003,56 @@ canvas{display:none}
   #preview{touch-action:none;overscroll-behavior:contain}
 }
 
+/* 5.2.C — Screen wake status and durable recording archive */
+.wake-pill{font-size:10px;color:#b3bbc3}
+.wake-pill.on{color:#34c77b;border-color:rgba(52,199,123,.34)}
+.wake-pill.off{color:#f6bf3c}
+.archive-trigger{cursor:pointer;text-align:left;color:#fff}
+.archive-trigger.error{color:#ff7777;border-color:rgba(255,95,95,.4)}
+.archive-layer[hidden],.archive-download-ready[hidden]{display:none !important}
+.archive-layer{
+  position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;
+  padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
+  background:rgba(0,0,0,.88);
+}
+.archive-panel{
+  background:#171c22;color:#fff;border:1px solid rgba(255,255,255,.23);
+  border-radius:18px;box-shadow:0 18px 54px rgba(0,0,0,.6);
+  width:min(530px,100%);max-height:90dvh;overflow-y:auto;padding:18px;
+  -webkit-overflow-scrolling:touch;
+}
+.archive-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.archive-head h2{font-size:18px;margin:0}
+.archive-close{font-weight:900;background:#30363f;color:#fff;border:0;border-radius:9px;padding:10px 13px;cursor:pointer}
+.archive-intro{color:#b9c2cb;font-size:12px;line-height:1.55;margin:10px 0 15px}
+.archive-list{display:flex;flex-direction:column;gap:12px}
+.archive-session{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:#222931}
+.archive-session-title{font-size:12px;font-weight:900;margin-bottom:5px;overflow-wrap:anywhere}
+.archive-session-note{font-size:11px;color:#c7ced4;line-height:1.45}
+.archive-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.archive-action,.archive-download-ready{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  min-height:38px;padding:8px 12px;border:1px solid rgba(255,255,255,.21);
+  background:#323a44;border-radius:9px;color:#fff;font-size:11px;font-weight:800;
+  text-decoration:none;cursor:pointer;
+}
+.archive-action.primary,.archive-download-ready{background:#f5a623;color:#101010;border-color:#f5a623}
+.archive-action.danger{background:transparent;border-color:#8f4a4a;color:#ffb1b1}
+.archive-action:disabled{opacity:.45;cursor:wait}
+.archive-segments{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.archive-segment{display:flex;align-items:center;justify-content:space-between;gap:9px;font-size:11px;color:#d4dde5}
+.archive-segment a{flex:0 0 auto;color:#f7b94c;text-decoration:underline;font-weight:800}
+.archive-notice{font-size:11px;line-height:1.5;color:#ffcb71;margin-top:10px}
+.archive-empty{color:#bdc8d0;font-size:12px;padding:20px 0}
+.archive-bottom{font-size:10px;color:#abb7c1;line-height:1.5;margin-top:14px}
+@media(orientation:portrait){
+ .locator-archive-button{width:100%;background:#252c34;border:1px solid rgba(255,255,255,.18);color:#fff;padding:13px 18px;border-radius:12px;font-size:12px;font-weight:900;cursor:pointer}
+}
+@media(orientation:landscape) and (max-height:430px){
+ .archive-panel{max-height:90dvh}
+ .topbar{gap:5px}
+ .topbar .pill{padding:5px 8px}
+}
 </style>
 </head>
 
@@ -1035,6 +1085,8 @@ canvas{display:none}
     <button class="pill stab-pill off" id="stabToggle" type="button">
       STAB: CHECK
     </button>
+    <div class="pill wake-pill off" id="wakeStatus" aria-live="off">LAYAR: CHECK</div>
+    <button class="pill archive-trigger" id="recordingArchiveBtn" type="button">ARSIP VIDEO · 0</button>
   </div>
 
   <div class="diag-panel" id="diagPanel">
@@ -1127,7 +1179,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.2.B</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.2.C</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1165,6 +1217,7 @@ canvas{display:none}
       <div class="locator-footer">
         <div class="locator-time" id="locatorDateTime">--/--/---- --:--:--</div>
         <button type="button" id="locatorStartGPS" class="locator-gps-button">Aktifkan GPS Presisi</button>
+        <button type="button" id="locatorArchiveBtn" class="locator-archive-button">Arsip Video · 0 segmen</button>
         <div class="locator-orientation-hint">Putar HP ke landscape untuk kamera foto/video 16:9</div>
       </div>
     </div>
@@ -1208,14 +1261,25 @@ canvas{display:none}
     </div>
   </div>
 
-  <canvas id="captureCanvas"></canvas>
+   <div class="archive-layer" id="archiveLayer" hidden>
+     <section class="archive-panel" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+       <div class="archive-head">
+         <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
+         <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
+       </div>
+       <p class="archive-intro">Setiap segmen 2 menit disimpan terlebih dahulu di perangkat (IndexedDB). Pilih <b>Siapkan ZIP</b>, lalu tekan <b>Unduh ZIP</b> untuk menyimpan seluruh segmen sesi dalam satu berkas.</p>
+       <div class="archive-list" id="archiveList">Memuat rekaman...</div>
+       <div class="archive-bottom">Jangan hapus data situs/browser sebelum rekaman diekspor dan diverifikasi. ZIP berisi file video terpisah, bukan satu video yang digabung. Jika layar terkunci atau aplikasi ditinggalkan, perekaman akan dihentikan untuk melindungi segmen terakhir.</div>
+     </section>
+   </div>
+   <canvas id="captureCanvas"></canvas>
   <canvas id="videoCanvas"></canvas>
   <canvas id="videoOverlayCanvas"></canvas>
   <div class="toast" id="toast"></div>
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.B";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.C";
 
 /* =========================================================
    CONFIG
@@ -1370,6 +1434,27 @@ let recordingSegmentIndex = 0;
 let recordingSegmentStartedAt = 0;
 let recordingSegmentStartContext = "LOCATION";
 let recordingSegmentStartStamp = "";
+
+// 5.2.C — archive is durable until user explicitly deletes sessions.
+const RECORDING_DB_NAME = "CMMGeoCamRecordings";
+const RECORDING_DB_VERSION = 1;
+let recordingDBPromise = null;
+let activeRecordingSession = null;
+let recordingSaveQueue = Promise.resolve();
+let recordingSaveError = null;
+let recordingFinishing = false;
+let recorderStopPending = false;
+let emergencySegments = []; // retained in RAM only if the device rejects IndexedDB
+let archiveOpen = false;
+let archiveObjectURLs = [];
+let archiveTotalSegments = 0;
+let preparedZipURL = null;
+
+// Native screen wake lock: requested only while landscape camera is active.
+let screenWakeSentinel = null;
+let screenWakePending = false;
+let screenWakeSupported = !!(navigator.wakeLock && navigator.wakeLock.request);
+let visibilityStoppedRecording = false;
 
 /*
    Prototype 12.3 video profile.
@@ -2782,8 +2867,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.B"),
-        fetch("./Corridor_Tamer.csv?v=5.2.B")
+        fetch("./STA_Tamer.csv?v=5.2.C"),
+        fetch("./Corridor_Tamer.csv?v=5.2.C")
       ]);
 
     if(!staResponse.ok){
@@ -4261,6 +4346,7 @@ async function startCamera(){
 
     startGPS();
     updateStabilizerUI();
+    syncScreenWakeLock();
 
     const cameraText=
       actualCameraWidth && actualCameraHeight
@@ -5458,6 +5544,383 @@ function preferredVideoFormat(){
 }
 
 
+/* =========================================================
+   5.2.C — PERSISTENT VIDEO ARCHIVE (IndexedDB)
+   No automatic browser downloads are triggered by segment rotation.
+========================================================= */
+function openRecordingDB(){
+  if(recordingDBPromise) return recordingDBPromise;
+  if(!window.indexedDB) return Promise.reject(new Error("IndexedDB tidak tersedia."));
+  recordingDBPromise=new Promise((resolve,reject)=>{
+    const request=indexedDB.open(RECORDING_DB_NAME,RECORDING_DB_VERSION);
+    request.onupgradeneeded=()=>{
+      const db=request.result;
+      if(!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions",{keyPath:"id"});
+      if(!db.objectStoreNames.contains("segments")){
+        const segments=db.createObjectStore("segments",{keyPath:"id"});
+        segments.createIndex("sessionId","sessionId",{unique:false});
+      }
+    };
+    request.onsuccess=()=>{
+      const db=request.result;
+      db.onversionchange=()=>db.close();
+      resolve(db);
+    };
+    request.onerror=()=>reject(request.error||new Error("Database video gagal dibuka."));
+    request.onblocked=()=>reject(new Error("Database video terkunci tab lain."));
+  }).catch(error=>{
+    recordingDBPromise=null;
+    throw error;
+  });
+  return recordingDBPromise;
+}
+async function archiveGetAll(storeName){
+  const db=await openRecordingDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,"readonly");
+    const req=tx.objectStore(storeName).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error||new Error("Gagal membaca arsip."));
+  });
+}
+async function archivePutSession(session){
+  const db=await openRecordingDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction("sessions","readwrite");
+    tx.objectStore("sessions").put({...session});
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error||new Error("Sesi gagal disimpan."));
+    tx.onabort=()=>reject(tx.error||new Error("Sesi dibatalkan."));
+  });
+}
+async function archiveSaveSegment(segment){
+  const db=await openRecordingDB();
+  if(!activeRecordingSession) throw new Error("Sesi rekaman tidak tersedia.");
+  const newSession={...activeRecordingSession,
+    segmentCount:activeRecordingSession.segmentCount+1,
+    totalBytes:activeRecordingSession.totalBytes+segment.blob.size,
+    savedDurationMs:activeRecordingSession.savedDurationMs+segment.durationMs,
+    updatedAt:Date.now()
+  };
+  await new Promise((resolve,reject)=>{
+    // Atomic write: segment and updated session count are committed together.
+    const tx=db.transaction(["sessions","segments"],"readwrite");
+    tx.objectStore("segments").put(segment);
+    tx.objectStore("sessions").put(newSession);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error||new Error("Penyimpanan video gagal."));
+    tx.onabort=()=>reject(tx.error||new Error("Penyimpanan video dibatalkan."));
+  });
+  activeRecordingSession=newSession;
+  archiveTotalSegments++;
+  updateArchiveCounters();
+  toast(`Segmen ${segment.segmentIndex} tersimpan di arsip lokal.`);
+}
+async function archiveDeleteSession(sessionId){
+  const db=await openRecordingDB();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(["sessions","segments"],"readwrite");
+    const segments=tx.objectStore("segments");
+    const index=segments.index("sessionId");
+    const req=index.openCursor(IDBKeyRange.only(sessionId));
+    req.onsuccess=()=>{
+      const cursor=req.result;
+      if(cursor){cursor.delete();cursor.continue();}
+    };
+    tx.objectStore("sessions").delete(sessionId);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error||new Error("Gagal menghapus arsip."));
+    tx.onabort=()=>reject(tx.error||new Error("Penghapusan dibatalkan."));
+  });
+  await refreshArchiveCounters();
+}
+async function refreshArchiveCounters(){
+  try{
+    const sessions=await archiveGetAll("sessions");
+    archiveTotalSegments=sessions.reduce((count,item)=>count+(item.segmentCount||0),0);
+  }catch(e){console.warn("Arsip lokal:",e);}
+  updateArchiveCounters();
+}
+function updateArchiveCounters(){
+  const hasError=!!recordingSaveError || emergencySegments.length>0;
+  const count=archiveTotalSegments;
+  const landscape=$("recordingArchiveBtn");
+  const portrait=$("locatorArchiveBtn");
+  if(landscape){
+    landscape.textContent=hasError ? `ARSIP ERROR · ${count}` : `ARSIP VIDEO · ${count}`;
+    landscape.classList.toggle("error",hasError);
+  }
+  if(portrait) portrait.textContent=`Arsip Video · ${count} segmen${hasError ? " · PERIKSA" : ""}`;
+}
+function recordingSessionId(){
+  return `CMM_${filenameTimestamp()}_${Math.random().toString(36).slice(2,8)}`;
+}
+function prettyBytes(bytes){
+  if(!Number.isFinite(bytes)) return "--";
+  if(bytes>=1048576) return (bytes/1048576).toFixed(1)+" MB";
+  return (bytes/1024).toFixed(0)+" KB";
+}
+function niceArchiveDate(ms){return new Date(ms).toLocaleString("id-ID",{hour12:false});}
+function archiveSafeName(segment){
+  const extension=String(segment.mime||"").toLowerCase().includes("mp4")?"mp4":"webm";
+  const index=String(segment.segmentIndex).padStart(3,"0");
+  return `CMMGeoCam_VIDEO_SEG${index}_${safeToken(segment.startContext)||"LOCATION"}_TO_${safeToken(segment.endContext)||"LOCATION"}_${segment.startStamp}.${extension}`;
+}
+function revokeArchiveURLs(){
+  for(const url of archiveObjectURLs) URL.revokeObjectURL(url);
+  archiveObjectURLs=[];
+  if(preparedZipURL){URL.revokeObjectURL(preparedZipURL);preparedZipURL=null;}
+}
+function createArchiveButton(label,cls,onClick){
+  const button=document.createElement("button");
+  button.type="button";
+  button.className="archive-action"+(cls?" "+cls:"");
+  button.textContent=label;
+  button.addEventListener("click",onClick);
+  return button;
+}
+function archiveDownloadLink(blob,filename,label){
+  const a=document.createElement("a");
+  a.className="archive-download-ready";
+  a.href=URL.createObjectURL(blob);
+  archiveObjectURLs.push(a.href);
+  a.download=filename;
+  a.textContent=label;
+  return a;
+}
+function archiveZipMeta(session,segments){
+  return `CMM GeoCam 5.2.C\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nSegmen tersimpan: ${segments.length}\nDurasi total tersimpan (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat memulai capture\n\nArsip ZIP berisi beberapa file video terpisah. File tidak digabung otomatis.\nMohon periksa semua segmen sebelum menghapus arsip lokal.\n`;
+}
+/* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
+   memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
+const ZIP_CRC_TABLE=(()=>{
+  const table=new Uint32Array(256);
+  for(let i=0;i<256;i++){
+    let c=i;
+    for(let j=0;j<8;j++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+    table[i]=c>>>0;
+  }
+  return table;
+})();
+async function crc32Blob(blob){
+  let crc=0xFFFFFFFF;
+  for(let position=0;position<blob.size;position+=1048576){
+    const bytes=new Uint8Array(await blob.slice(position,position+1048576).arrayBuffer());
+    for(let i=0;i<bytes.length;i++) crc=ZIP_CRC_TABLE[(crc^bytes[i])&255]^(crc>>>8);
+  }
+  return (crc^0xFFFFFFFF)>>>0;
+}
+function zipDosDate(ms){
+  const date=new Date(ms);
+  const year=Math.max(1980,Math.min(2107,date.getFullYear()));
+  return {time:((date.getHours()&31)<<11)|((date.getMinutes()&63)<<5)|(Math.floor(date.getSeconds()/2)&31),
+    date:((year-1980)<<9)|(((date.getMonth()+1)&15)<<5)|(date.getDate()&31)};
+}
+async function buildVideoZip(files,onProgress){
+  if(files.length>65535) throw new Error("Terlalu banyak file untuk ZIP.");
+  const encoder=new TextEncoder();
+  const parts=[], central=[];
+  let offset=0;
+  for(let i=0;i<files.length;i++){
+    const file=files[i];
+    const name=encoder.encode(file.name);
+    if(file.blob.size>0xFFFFFFFF || offset>0xFFFFFFFF) throw new Error("ZIP melebihi batas 4 GB. Unduh setiap segmen secara terpisah.");
+    if(onProgress) onProgress(i+1,files.length,file.name);
+    const crc=await crc32Blob(file.blob);
+    const dos=zipDosDate(file.date);
+    const local=new Uint8Array(30+name.length),lv=new DataView(local.buffer);
+    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);
+    lv.setUint16(6,0x0800,true);lv.setUint16(8,0,true);
+    lv.setUint16(10,dos.time,true);lv.setUint16(12,dos.date,true);
+    lv.setUint32(14,crc,true);lv.setUint32(18,file.blob.size,true);lv.setUint32(22,file.blob.size,true);
+    lv.setUint16(26,name.length,true);lv.setUint16(28,0,true);local.set(name,30);
+    parts.push(local,file.blob);
+    const cd=new Uint8Array(46+name.length),cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true);cv.setUint16(10,0,true);
+    cv.setUint16(12,dos.time,true);cv.setUint16(14,dos.date,true);
+    cv.setUint32(16,crc,true);cv.setUint32(20,file.blob.size,true);cv.setUint32(24,file.blob.size,true);
+    cv.setUint16(28,name.length,true);cv.setUint16(30,0,true);cv.setUint16(32,0,true);
+    cv.setUint16(34,0,true);cv.setUint16(36,0,true);cv.setUint32(38,0,true);
+    cv.setUint32(42,offset,true);cd.set(name,46);central.push(cd);
+    offset+=local.length+file.blob.size;
+  }
+  const cdLength=central.reduce((n,p)=>n+p.length,0);
+  if(offset+cdLength>0xFFFFFFFF) throw new Error("ZIP terlalu besar. Unduh segmen satu per satu.");
+  const end=new Uint8Array(22),view=new DataView(end.buffer);
+  view.setUint32(0,0x06054b50,true);view.setUint16(4,0,true);view.setUint16(6,0,true);
+  view.setUint16(8,files.length,true);view.setUint16(10,files.length,true);
+  view.setUint32(12,cdLength,true);view.setUint32(16,offset,true);view.setUint16(20,0,true);
+  return new Blob([...parts,...central,end],{type:"application/zip"});
+}
+async function prepareVideoZip(session,segments,button,actions){
+  button.disabled=true;
+  try{
+    const files=segments.map(seg=>({blob:seg.blob,name:archiveSafeName(seg),date:seg.startedAt}));
+    files.push({blob:new Blob([archiveZipMeta(session,segments)],{type:"text/plain"}),name:"INFO_REKAMAN.txt",date:Date.now()});
+    const blob=await buildVideoZip(files,(current,total)=>{button.textContent=`Menyiapkan ZIP ${current}/${total}...`;});
+    const download=archiveDownloadLink(blob,`${safeToken(session.id)}_REKAMAN.zip`,`Unduh ZIP · ${prettyBytes(blob.size)}`);
+    actions.appendChild(download);
+    button.textContent="ZIP siap ✓";
+    toast("ZIP siap. Tekan Unduh ZIP untuk menyimpan file.");
+  }catch(err){
+    button.disabled=false;
+    button.textContent="Ulangi Siapkan ZIP";
+    toast("ZIP gagal: "+(err.message||err));
+  }
+}
+async function renderArchivePanel(){
+  const container=$("archiveList");
+  revokeArchiveURLs();
+  container.textContent="Memuat arsip...";
+  try{
+    const [sessions,segments]=await Promise.all([archiveGetAll("sessions"),archiveGetAll("segments")]);
+    if(!archiveOpen) return;
+    container.replaceChildren();
+    sessions.sort((a,b)=>b.startedAt-a.startedAt);
+    if(!sessions.length && !emergencySegments.length){
+      const none=document.createElement("div");none.className="archive-empty";
+      none.textContent="Belum ada rekaman tersimpan. Segmen akan muncul setelah mencapai 2 menit atau setelah REC dihentikan.";
+      container.appendChild(none);
+    }
+    for(const session of sessions){
+      const matches=segments.filter(seg=>seg.sessionId===session.id).sort((a,b)=>a.segmentIndex-b.segmentIndex);
+      const entry=document.createElement("div");entry.className="archive-session";
+      const title=document.createElement("div");title.className="archive-session-title";
+      title.textContent=`${niceArchiveDate(session.startedAt)} · ${matches.length} segmen`;
+      const meta=document.createElement("div");meta.className="archive-session-note";
+      const status=session.status==="recording" ? "TERPUTUS / MASIH AKTIF" : session.status==="storage-error" ? "ERROR SIMPAN" : "SELESAI";
+      meta.textContent=`Status: ${status} · ${prettyBytes(matches.reduce((n,x)=>n+x.blob.size,0))} · ${Math.round(matches.reduce((n,x)=>n+x.durationMs,0)/1000)} detik`;
+      entry.append(title,meta);
+      const list=document.createElement("div");list.className="archive-segments";
+      for(const segment of matches){
+        const row=document.createElement("div");row.className="archive-segment";
+        const name=document.createElement("span");name.textContent=`Seg ${segment.segmentIndex} · ${Math.round(segment.durationMs/1000)} dtk · ${prettyBytes(segment.blob.size)}`;
+        const download=archiveDownloadLink(segment.blob,archiveSafeName(segment),"Unduh");
+        row.append(name,download);list.appendChild(row);
+      }
+      entry.appendChild(list);
+      const actions=document.createElement("div");actions.className="archive-actions";
+      if(matches.length){
+        const button=createArchiveButton("Siapkan ZIP", "primary",()=>prepareVideoZip(session,matches,button,actions));
+        actions.appendChild(button);
+      }
+      const deleteButton=createArchiveButton("Hapus Arsip","danger",async()=>{
+        if(activeRecordingSession && activeRecordingSession.id===session.id){toast("Hentikan REC sebelum menghapus sesi ini.");return;}
+        if(!window.confirm(`Hapus permanen ${matches.length} segmen dari arsip lokal? Pastikan sudah diunduh.`)) return;
+        deleteButton.disabled=true;
+        try{await archiveDeleteSession(session.id);await renderArchivePanel();}
+        catch(err){toast("Hapus gagal: "+(err.message||err));deleteButton.disabled=false;}
+      });
+      actions.appendChild(deleteButton);
+      entry.appendChild(actions);container.appendChild(entry);
+    }
+    if(emergencySegments.length){
+      const emergency=document.createElement("div");emergency.className="archive-session";
+      const warning=document.createElement("div");warning.className="archive-notice";
+      warning.textContent="PENTING: Penyimpanan lokal gagal. Segmen berikut hanya berada di memori sementara. Unduh SEKARANG sebelum menutup aplikasi.";
+      emergency.appendChild(warning);
+      for(const segment of emergencySegments){
+        const link=archiveDownloadLink(segment.blob,archiveSafeName(segment),`Unduh darurat segmen ${segment.segmentIndex}`);
+        emergency.appendChild(link);
+      }
+      container.prepend(emergency);
+    }
+  }catch(err){
+    container.textContent="Arsip tidak dapat dibuka: "+(err.message||err);
+  }
+}
+async function openArchivePanel(){
+  archiveOpen=true;
+  $("archiveLayer").hidden=false;
+  await renderArchivePanel();
+}
+function closeArchivePanel(){
+  archiveOpen=false;
+  $("archiveLayer").hidden=true;
+  revokeArchiveURLs();
+}
+function reportRecordingSaveError(error,segment){
+  recordingSaveError=error;
+  emergencySegments.push(segment);
+  updateArchiveCounters();
+  toast("PENYIMPANAN VIDEO GAGAL! Buka Arsip Video dan unduh segmen darurat.");
+  if(recordingSessionActive) stopVideoRecording();
+}
+function queueSegmentPersistence(segment){
+  recordingSaveQueue=recordingSaveQueue.then(async()=>{
+    if(recordingSaveError){emergencySegments.push(segment);return;}
+    try{await archiveSaveSegment(segment);}
+    catch(error){reportRecordingSaveError(error,segment);}
+  });
+}
+async function finishRecordingToArchive(){
+  if(recordingFinishing) return;
+  recordingFinishing=true;
+  await recordingSaveQueue;
+  try{
+    if(activeRecordingSession){
+      const done={...activeRecordingSession,
+        status:recordingSaveError?"storage-error":"completed",
+        endedAt:Date.now(),updatedAt:Date.now()};
+      await archivePutSession(done);
+    }
+  }catch(error){recordingSaveError=error;updateArchiveCounters();}
+  activeRecordingSession=null;
+  cleanupRecordingSession();
+  updateArchiveCounters();
+  const outcome=recordingSaveError
+    ? "Penyimpanan bermasalah. Buka ARSIP VIDEO untuk pemulihan!"
+    : "Rekaman tersimpan di ARSIP VIDEO. Ekspor ZIP sebelum menghapus data browser.";
+  toast(outcome);
+  if(archiveOpen) renderArchivePanel();
+  recordingFinishing=false;
+}
+/* =========================================================
+   SCREEN WAKE LOCK: while landscape camera remains visible.
+========================================================= */
+function canHoldScreenWakeLock(){
+  return !!mediaStream && isLandscapeMode() && document.visibilityState==="visible";
+}
+function updateScreenWakeUI(message,active){
+  const label=$("wakeStatus");
+  if(!label) return;
+  label.textContent="LAYAR: "+message;
+  label.classList.toggle("on",!!active);
+  label.classList.toggle("off",!active);
+}
+async function releaseScreenWakeLock(){
+  const lock=screenWakeSentinel;
+  screenWakeSentinel=null;
+  if(lock) try{await lock.release();}catch(e){}
+  updateScreenWakeUI("OTOMATIS",false);
+}
+async function syncScreenWakeLock(){
+  if(!canHoldScreenWakeLock()){
+    await releaseScreenWakeLock();
+    return;
+  }
+  if(!screenWakeSupported){updateScreenWakeUI("TIDAK DIDUKUNG",false);return;}
+  if(screenWakeSentinel || screenWakePending) return;
+  screenWakePending=true;
+  try{
+    const lock=await navigator.wakeLock.request("screen");
+    if(!canHoldScreenWakeLock()){
+      await lock.release();
+      updateScreenWakeUI("OTOMATIS",false);
+      return;
+    }
+    screenWakeSentinel=lock;
+    updateScreenWakeUI("AKTIF",true);
+    lock.addEventListener("release",()=>{
+      if(screenWakeSentinel===lock){screenWakeSentinel=null;updateScreenWakeUI("TERLEPAS",false);}
+    });
+  }catch(e){
+    updateScreenWakeUI("GAGAL",false);
+    console.warn("Wake Lock:",e);
+  }finally{screenWakePending=false;}
+}
+
 function formatRecordingElapsed(
   elapsedSeconds
 ){
@@ -5568,64 +6031,6 @@ function cleanupRecordingSession(){
   );
 }
 
-function downloadFinalizedSegment(
-  blob,
-  actualMime,
-  segmentIndex,
-  startContext,
-  endContext,
-  startStamp
-){
-  const isMp4=
-    actualMime
-      .toLowerCase()
-      .includes("mp4");
-
-  const extension=
-    isMp4
-      ? "mp4"
-      : "webm";
-
-  const safeStart=
-    safeToken(
-      startContext
-    ) || "LOCATION";
-
-  const safeEnd=
-    safeToken(
-      endContext
-    ) || "LOCATION";
-
-  const segmentNo=
-    String(segmentIndex)
-      .padStart(3,"0");
-
-  const url=
-    URL.createObjectURL(
-      blob
-    );
-
-  const a=
-    document.createElement("a");
-
-  a.href=url;
-
-  /*
-    Segment filename captures the location context at BOTH
-    boundaries. Useful when a 2-minute segment crosses
-    MAINLINE -> RAMP -> GATE.
-  */
-  a.download=
-    `CMMGeoCam_VIDEO_SEG${segmentNo}_${safeStart}_TO_${safeEnd}_${startStamp}.${extension}`;
-
-  a.click();
-
-  setTimeout(
-    ()=>URL.revokeObjectURL(url),
-    10000
-  );
-}
-
 function scheduleNextRecordingSegment(){
   clearRecordingSegmentTimer();
 
@@ -5646,6 +6051,7 @@ function scheduleNextRecordingSegment(){
             Stop only this MediaRecorder instance so the container
             is finalized. onstop starts the next segment.
           */
+          recorderStopPending=true;
           mediaRecorder.stop();
         }
       },
@@ -5654,180 +6060,87 @@ function scheduleNextRecordingSegment(){
 }
 
 function startRecorderSegment(){
-  if(
-    !recordingSessionActive ||
-    !recordingCanvasStream ||
-    !recordingVideoFormat
-  ){
-    return;
-  }
-
-  recordingSegmentIndex++;
-
-  recordedChunks=[];
-
-  recordingSegmentStartedAt=
-    Date.now();
-
-  const segmentDate=
-    new Date(
-      recordingSegmentStartedAt
-    );
-
-  recordingSegmentStartStamp=
-    filenameTimestampFromDate(
-      segmentDate
-    );
-
-  recordingSegmentStartContext=
-    currentContextForFilename();
-
+  if(!recordingSessionActive || !recordingCanvasStream || !recordingVideoFormat) return;
+  const segmentIndex=++recordingSegmentIndex;
+  const startedAt=Date.now();
+  const startStamp=filenameTimestampFromDate(new Date(startedAt));
+  const startContext=currentContextForFilename();
+  const chunks=[]; // per-recorder closure: cannot be overwritten by the next segment
+  let recorder;
   try{
-    mediaRecorder=
-      new MediaRecorder(
-        recordingCanvasStream,
-        recordingVideoFormat.mime
-          ? {
-              mimeType:
-                recordingVideoFormat.mime,
-
-              videoBitsPerSecond:
-                VIDEO_BITRATE
-            }
-          : {
-              videoBitsPerSecond:
-                VIDEO_BITRATE
-            }
-      );
-  }catch(e){
-    console.error(e);
-
+    recorder=new MediaRecorder(recordingCanvasStream,
+      recordingVideoFormat.mime
+        ? {mimeType:recordingVideoFormat.mime,videoBitsPerSecond:VIDEO_BITRATE}
+        : {videoBitsPerSecond:VIDEO_BITRATE});
+  }catch(error){
+    recordingSaveError=error;
     recordingSessionActive=false;
-    cleanupRecordingSession();
-
-    toast(
-      "MediaRecorder segment tidak dapat dimulai."
-    );
-
+    toast("MediaRecorder gagal. Segmen sebelumnya tetap berada di arsip.");
+    finishRecordingToArchive();
     return;
   }
-
-  mediaRecorder.ondataavailable=
-    event=>{
-      if(
-        event.data &&
-        event.data.size>0
-      ){
-        recordedChunks.push(
-          event.data
-        );
+  mediaRecorder=recorder;
+  recorderStopPending=false;
+  recorder.ondataavailable=event=>{
+    if(event.data && event.data.size>0) chunks.push(event.data);
+  };
+  recorder.onerror=event=>{
+    recordingSaveError=event.error||new Error("MediaRecorder error");
+    updateArchiveCounters();
+    recordingSessionActive=false;
+    try{
+      if(recorder.state==="recording"){
+        recorderStopPending=true;
+        recorder.stop();
+      }else if(!recorderStopPending){
+        finishRecordingToArchive();
       }
-    };
-
-  mediaRecorder.onerror=
-    event=>{
-      console.error(
-        "MediaRecorder error:",
-        event.error || event
-      );
-
+    }catch(e){finishRecordingToArchive();}
+  };
+  recorder.onstop=()=>{
+    recorderStopPending=false;
+    clearRecordingSegmentTimer();
+    const endTime=Date.now();
+    const actualMime=recorder.mimeType || recordingVideoFormat?.mime || "video/webm";
+    const blob=new Blob(chunks,{type:actualMime});
+    if(blob.size>0){
+      queueSegmentPersistence({
+        id:`${activeRecordingSession?.id||"REC"}_${String(segmentIndex).padStart(4,"0")}`,
+        sessionId:activeRecordingSession?.id||"REC",
+        segmentIndex,startedAt,endTime,durationMs:endTime-startedAt,
+        startStamp,startContext,endContext:currentContextForFilename(),
+        mime:actualMime,blob
+      });
+    }else{
+      recordingSaveError=new Error(`Segmen ${segmentIndex} kosong.`);
+      updateArchiveCounters();
       recordingSessionActive=false;
-      cleanupRecordingSession();
-
-      toast(
-        "Terjadi error pada perekaman video."
-      );
-    };
-
-  mediaRecorder.onstop=
-    ()=>{
-      clearRecordingSegmentTimer();
-
-      const recorder=
-        mediaRecorder;
-
-      const actualMime=
-        (
-          recorder &&
-          recorder.mimeType
-        ) ||
-        recordingVideoFormat.mime ||
-        "video/webm";
-
-      const blob=
-        new Blob(
-          recordedChunks,
-          {type:actualMime}
-        );
-
-      const segmentEndContext=
-        currentContextForFilename();
-
-      const finishedIndex=
-        recordingSegmentIndex;
-
-      const finishedStartContext=
-        recordingSegmentStartContext;
-
-      const finishedStartStamp=
-        recordingSegmentStartStamp;
-
-      /*
-        Each segment has been STOPPED before download,
-        therefore the browser has had the chance to finalize
-        that segment's container.
-      */
-      if(blob.size>0){
-        downloadFinalizedSegment(
-          blob,
-          actualMime,
-          finishedIndex,
-          finishedStartContext,
-          segmentEndContext,
-          finishedStartStamp
-        );
-      }
-
-      recordedChunks=[];
-
-      if(recordingSessionActive){
-        /*
-          Keep camera/canvas/frame-loop alive.
-          Start the next finalized segment immediately.
-        */
-        setTimeout(
-          ()=>{
-            if(recordingSessionActive){
-              startRecorderSegment();
-            }
-          },
-          30
-        );
-      }else{
-        cleanupRecordingSession();
-
-        toast(
-          "Rekaman selesai. Semua segmen sudah difinalisasi."
-        );
-      }
-    };
-
-  /*
-    No timeslice for MP4.
-    Every 2-minute segment is finalized by stop(), avoiding the old
-    periodic fragmented-MP4 concatenation problem.
-  */
-  recorderUsesSingleFinalBlob=true;
-  mediaRecorder.start();
-
-  scheduleNextRecordingSegment();
-
-  toast(
-    `REC segmen ${recordingSegmentIndex} · maksimal 2 menit`
-  );
+      toast("Perekaman menghasilkan segmen kosong. Periksa kamera dan arsip.");
+    }
+    // Start next segment immediately. Disk write runs independently in its
+    // serial queue; no browser download or confirmation popup at this point.
+    if(recordingSessionActive){
+      startRecorderSegment();
+    }else{
+      finishRecordingToArchive();
+    }
+  };
+  try{
+    recorder.start();
+    scheduleNextRecordingSegment();
+  }catch(error){
+    recordingSaveError=error;
+    recordingSessionActive=false;
+    finishRecordingToArchive();
+    toast("Gagal memulai rekaman. Periksa Arsip Video.");
+  }
 }
 
 async function startVideoRecording(){
+  if(activeRecordingSession || recordingFinishing || recorderStopPending){
+    toast("Tunggu finalisasi dan penyimpanan segmen sebelumnya selesai.");
+    return;
+  }
   if(!canStartCapture()){
     return;
   }
@@ -5906,6 +6219,33 @@ async function startVideoRecording(){
   recordingVideoFormat=
     preferredVideoFormat();
 
+  // Confirm that IndexedDB can write a session before starting REC.
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      try{await navigator.storage.persist();}catch(e){}
+    }
+    if(navigator.storage && navigator.storage.estimate){
+      const estimate=await navigator.storage.estimate();
+      if(estimate.quota && estimate.usage && estimate.quota-estimate.usage<32*1048576){
+        throw new Error("Ruang penyimpanan aplikasi kurang dari 32 MB.");
+      }
+    }
+    recordingSaveError=null;
+    recordingSaveQueue=Promise.resolve();
+    recordingFinishing=false;
+    recorderStopPending=false;
+    activeRecordingSession={id:recordingSessionId(),startedAt:Date.now(),
+      endedAt:null,updatedAt:Date.now(),status:"recording",segmentCount:0,
+      savedDurationMs:0,totalBytes:0};
+    await archivePutSession(activeRecordingSession);
+  }catch(error){
+    activeRecordingSession=null;
+    recordingCanvasStream?.getTracks().forEach(track=>track.stop());
+    recordingCanvasStream=null;
+    toast("REC dibatalkan: arsip lokal tidak siap. "+(error.message||error));
+    return;
+  }
+
   recordingSessionActive=true;
   recordingSegmentIndex=0;
 
@@ -5943,6 +6283,7 @@ async function startVideoRecording(){
   scheduleVideoFrames();
 
   startRecorderSegment();
+  syncScreenWakeLock();
 
   toast(
     "Video 720p · rolling 2 menit · " +
@@ -5972,7 +6313,7 @@ function stopVideoRecording(){
 
   /*
     Mark overall session stopped BEFORE stopping current segment.
-    onstop will therefore finalize/download it and then clean up
+    onstop will therefore persist it to IndexedDB and then clean up,
     instead of opening another segment.
   */
   recordingSessionActive=false;
@@ -5983,9 +6324,18 @@ function stopVideoRecording(){
     mediaRecorder &&
     mediaRecorder.state==="recording"
   ){
-    mediaRecorder.stop();
-  }else{
-    cleanupRecordingSession();
+    try{
+      recorderStopPending=true;
+      mediaRecorder.stop();
+    }catch(error){
+      recorderStopPending=false;
+      recordingSaveError=error;
+      finishRecordingToArchive();
+    }
+  }else if(!recorderStopPending){
+    // A segment may be finalizing at the 2-minute boundary.
+    // Do not clean up until its asynchronous onstop event is received.
+    finishRecordingToArchive();
   }
 }
 
@@ -5998,6 +6348,10 @@ $("startBtn").addEventListener(
 );
 
 $("locatorStartGPS").addEventListener("click",startGPS);
+$("recordingArchiveBtn").addEventListener("click",openArchivePanel);
+$("locatorArchiveBtn").addEventListener("click",openArchivePanel);
+$("archiveClose").addEventListener("click",closeArchivePanel);
+$("archiveLayer").addEventListener("click",event=>{if(event.target===$("archiveLayer")) closeArchivePanel();});
 document.querySelectorAll(".zoom-btn").forEach(button=>{
   button.addEventListener("click",()=>setCameraZoom(Number(button.dataset.zoom)));
 });
@@ -6157,6 +6511,7 @@ function handleOrientationChange(){
   pinchGesture=null;
   resetGyroFilter();
 
+  syncScreenWakeLock();
   if(isLandscapeMode()){
     return;
   }
@@ -6194,6 +6549,23 @@ window.addEventListener(
   }
 );
 
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){
+    if(isRecording()){
+      visibilityStoppedRecording=true;
+      stopVideoRecording();
+    }
+    releaseScreenWakeLock();
+  }else{
+    syncScreenWakeLock();
+    if(visibilityStoppedRecording){
+      visibilityStoppedRecording=false;
+      toast("Rekaman dihentikan saat aplikasi tidak aktif. Cek Arsip Video.");
+    }
+  }
+});
+window.addEventListener("pagehide",()=>{releaseScreenWakeLock();});
+
 /* =========================================================
    INIT
 ========================================================= */
@@ -6205,6 +6577,8 @@ render();
 setCaptureMode("photo");
 updateZoomUI();
 autoResumeGrantedGPS();
+refreshArchiveCounters();
+updateScreenWakeUI(screenWakeSupported?"OTOMATIS":"TIDAK DIDUKUNG",false);
 
 if(
   "serviceWorker" in navigator
@@ -6213,7 +6587,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.B")
+        .register("./service-worker.js?v=5.2.C")
         .catch(console.error);
     }
   );

@@ -1,7 +1,7 @@
 {
-  "name": "CMM GeoCam 5.2.B",
+  "name": "CMM GeoCam 5.2.C",
   "short_name": "CMM GeoCam",
-  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom kontinu pinch 1x-4x + preset 1x/2x/4x, Road Network, dan dokumentasi foto/video ber-watermark",
+  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom kontinu pinch 1x-4x, rekaman tersimpan ke IndexedDB, ekspor ZIP manual, wake lock layar, GPS presisi 25 m, dan watermark",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
