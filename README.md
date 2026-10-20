@@ -1,62 +1,46 @@
-# CMM GeoCam · Prototype 5.2.D
+# CMM GeoCam — Prototype 5.2.E
 
-## Pembaruan: rekam satu video utuh
+**Rilis 5.2.E merupakan penggantian penamaan dari 5.2.D.1 (Archive Connection Fix).** Mekanisme perekaman, GPS, zoom, watermark, dan struktur database tidak diubah. Yang diperbarui adalah identitas build pada halaman, metadata PWA, versi URL file CSV, cache service worker, dan informasi versi yang disertakan dalam ekspor arsip.
 
-Versi 5.2.D merekam video menggunakan **satu instance MediaRecorder untuk satu sesi REC**. Berbeda dengan versi 5.2.C, aplikasi tidak menghentikan lalu memulai recorder baru setiap 2 menit. Data dari *satu* MediaRecorder disimpan ke IndexedDB sesuai urutan event `dataavailable`. Setelah STOP, hasilnya disusun sebagai satu Blob video lengkap tanpa encoding ulang atau sambungan MP4 independen.
+## Perbaikan arsip yang dipertahankan
 
-Fitur arsip **Siapkan Video Utuh → Unduh Video** menghasilkan satu file MP4 jika kamera/browser mendukung MediaRecorder MP4 (H.264/MP4), atau WebM jika tidak didukung. Jangan mengganti ekstensi WebM menjadi MP4. Mode ZIP dipertahankan untuk cadangan data dan arsip lama 5.2.C.
+Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing.` Jika koneksi IndexedDB sudah ditutup oleh browser, aplikasi menginvalidasi koneksi lama dan mencoba membuka koneksi baru. Saat pembuatan transaksi gagal karena koneksi sedang ditutup, sistem mencoba sekali lagi dengan koneksi yang baru. Panel Arsip dilengkapi opsi **Coba Buka Ulang Arsip** saat pembacaan gagal.
 
-### Poin penting tentang checkpoint
+**Kompatibilitas data:** Nama database `CMMGeoCamRecordings`, versi skema `1`, dan object store `sessions` / `segments` tetap sama. Rekaman tersimpan pada origin/domain dan profil browser yang sama; perbarui situs pada URL yang sama agar arsip 5.2.C/5.2.D tetap dapat diakses. Jangan memilih Hapus data situs, membersihkan penyimpanan Chrome, atau uninstall PWA sebelum semua arsip penting diekspor dan diverifikasi.
 
-- Aplikasi memanggil `requestData()` sekitar setiap **30 detik**. Event data yang dihasilkan ditulis ke IndexedDB untuk menjaga urutan stream.
-- **Browser boleh menunda data hingga STOP, khususnya untuk MP4.** Karena itu, checkpoint tidak selalu merupakan berkas video siap putar dan **belum menjamin pemulihan video yang terhenti akibat browser ditutup paksa**.
-- Hasil MP4 utuh berlaku untuk sesi yang selesai normal, lengkap, dan berurutan. Arsip sesi abnormal tidak otomatis dianggap valid.
-- ZIP cadangan 5.2.D berisi *blok data*, bukan kumpulan video mandiri. Arsip 5.2.C lama tetap diekspor sebagai ZIP video-video terpisah, karena menggabungkan MP4 independen dengan menyambung byte tidak valid.
-- Setelah ekspor, cek durasi dan pemutaran awal–akhir. **Jangan hapus data situs atau uninstall PWA sebelum file diverifikasi.**
+## Cara kerja video
 
-## Cara menggunakan
+- Satu sesi REC menggunakan satu `MediaRecorder` berkelanjutan, sehingga setelah STOP normal, potongan data hasil satu recorder dapat disusun menjadi **satu file video** tanpa re-encoding.
+- Browser diminta mengeluarkan checkpoint setiap ~30 detik. Browser, terutama pada format MP4, dapat menunda data sampai STOP. **Checkpoint bukan jaminan pemulihan jika browser ditutup paksa.**
+- Arsip Video menawarkan **Siapkan Video Utuh → Unduh Video**. Format keluaran MP4 atau WebM mengikuti dukungan browser; jangan sekadar mengubah nama ekstensi.
+- Arsip lama 5.2.C masih diekspor sebagai ZIP berisi segmen video mandiri. Menyatukan byte dari MP4 independen bukan metode penggabungan yang valid.
+- Rekaman yang dihentikan abnormal belum tentu lengkap. Periksa durasi dan pemutaran dari awal hingga akhir sebelum menghapus arsip lokal.
 
-1. Timpa berkas pada repo HTTPS yang sama dengan paket 5.2.D. Jangan pindah domain/origin bila ingin mempertahankan arsip IndexedDB lama.
-2. Tutup aplikasi, buka ulang, lalu pastikan label **CMM GEOCAM 5.2.D** muncul di mode portrait. Pastikan juga file `service-worker.js` ikut ditimpa pada direktori publikasi yang sama, bukan hanya `index.html`.
-3. Jika masih 5.2.C, coba URL yang sama dalam mode samaran Chrome. Jika samaran juga 5.2.C, periksa deploy GitHub Pages (branch/folder dan status Actions), bukan hanya cache perangkat.
-4. **Jangan memilih Hapus data situs / Clear storage saat masih ada arsip video di IndexedDB yang belum diekspor** karena tindakan tersebut dapat menghapus arsip lokal.
-3. Putar perangkat ke landscape, tekan Mulai Kamera. Saat `LAYAR: AKTIF`, permintaan Screen Wake Lock telah berhasil; jika gagal OS masih bisa mematikan layar.
-4. Tunggu `READY` untuk memulai REC, rekam 9–10 menit, tekan STOP, lalu tunggu notifikasi finalisasi arsip.
-5. Tekan **ARSIP VIDEO → Siapkan Video Utuh → Unduh Video Utuh**.
-6. Buka berkas hasil di Download/Galeri, pastikan durasi utuh dan videonya dapat diputar.
-7. Jika file utuh tidak siap, coba ZIP cadangan tanpa menghapus data browser, kemudian laporkan pesan error yang tampil.
+## Cara memasang versi 5.2.E
 
-## Status dan ketentuan sistem
+1. Ekstrak ZIP dan **timpa seluruh berkas** di direktori GitHub Pages yang sama. Pastikan `index.html`, `manifest.webmanifest`, dan `service-worker.js` ikut terganti dan deploy telah berhasil.
+2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.2.E**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
+3. Pilih **Arsip Video** untuk memastikan sesi lama masih muncul dan dapat diekspor.
+4. Untuk uji baru, masuk landscape, aktifkan kamera, tunggu status READY, rekam 9–10 menit, tekan STOP, lalu pilih **Siapkan Video Utuh → Unduh Video**.
+5. Cek durasi, seluruh isi video, logo/watermark, dan format file hasil ekspor. Ulangi uji 20–30 menit bila uji 10 menit berhasil.
 
-| Komponen | Perilaku |
+## Perilaku yang tidak berubah
+
+| Komponen | Kondisi 5.2.E |
 |---|---|
-| GPS | `MAX_GPS_ACCURACY = 25` m sebagai syarat awal foto/REC, bukan bukti deviasi STA ≤25 m terhadap Ledger |
-| GPS saat REC | Jika akurasi menurun saat REC berjalan, perekaman tidak dihentikan otomatis |
-| Pengenalan jaringan | Mainline + corridor database seperti 5.2.C, tanpa perubahan data CSV |
-| Jalur A/B | **Masih algoritma lama** (arah/tren) sampai database alignment spasial per jalur tersedia |
-| Orientasi | Portrait untuk Auto-STA; landscape untuk foto/video 16:9 |
-| Zoom | Tombol 1×/2×/4× dan pinch-to-zoom kontinu tetap |
-| Wake Lock | Meminta layar terus menyala saat kamera landscape aktif, bergantung OS/browser |
-| Video | 1280×720, target 30 fps, bitrate ~4 Mbps; hasil MP4/WebM sesuai dukungan browser |
-| Arsip | IndexedDB (origin sama), tombol ekspor utuh 5.2.D, ZIP legacy 5.2.C |
+| GPS capture gate | `MAX_GPS_ACCURACY = 25` m saat memulai foto/video; bukan jaminan deviasi STA terhadap Ledger ≤25 m |
+| GPS saat REC | Penurunan kualitas GPS tidak otomatis menghentikan REC berjalan |
+| Jalur A/B mainline | Masih logika arah/tren lama; belum pemisahan alignment spasial per jalur |
+| Mode | Portrait = Auto-STA Locator; landscape = GeoCam 16:9 |
+| Kamera | Foto, video, watermark, stabilisasi, zoom 1×/2×/4× dan pinch-to-zoom |
+| Screen Wake Lock | Diminta saat kamera landscape aktif; tergantung kemampuan Android/browser |
+| Arsip | IndexedDB pada domain/profil Chrome yang sama, dengan ekspor video utuh dan ZIP cadangan |
+| Database jalan | `STA_Tamer.csv` dan `Corridor_Tamer.csv` tidak berubah |
 
-## Uji verifikasi
+## Batasan validasi
 
-1. Sesi 9–10 menit: rekaman utuh, durasi hasil, jumlah file, suara (aplikasi saat ini video tanpa audio), watermark awal/akhir.
-2. Rekaman 20–30 menit: performa, ukuran file, daya baterai, kapasitas IndexedDB, memori ketika ekspor.
-3. GPS melemah >25 m *ketika REC sudah berlangsung*: REC tidak berhenti otomatis; label GPS LOW boleh berubah.
-4. Peralihan portrait, background, atau layar terkunci: finalisasi hanya jika browser masih sempat memproses event STOP.
-5. Pastikan arsip 5.2.C lama tidak hilang setelah upgrade.
+Perbaikan koneksi IndexedDB dan ekspor video sebelumnya telah diuji dalam simulasi Chromium. **5.2.E adalah perubahan versi tanpa perubahan fungsional baru**; kestabilan penyimpanan dan REC panjang tetap harus diuji langsung pada Android. Jika error penyimpanan berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen terdaftar.
 
-### Batas pengujian saat paket dibuat
+## Isi paket
 
-Pengujian kode di browser Chromium simulasi berhasil membuat beberapa potongan dari satu MediaRecorder; gabungannya lolos pemeriksaan format/durasi menggunakan `ffprobe` dan dapat diidentifikasi sebagai MP4. **Pengujian hardware langsung untuk rekaman 9 menit maupun 30 menit masih harus dilakukan di Android.**
-
-## Daftar berkas
-
-- `index.html` — aplikasi utama
-- `STA_Tamer.csv` dan `Corridor_Tamer.csv` — database Road Network (tidak diubah)
-- `logo-mms.png`, `icon-192.png`, `icon-512.png` — logo/ikon (tidak diubah)
-- `manifest.webmanifest` — metadata PWA 5.2.D
-- `service-worker.js` — shell cache baru untuk 5.2.D
-- `README.md` — panduan ini
+`index.html`, `manifest.webmanifest`, `service-worker.js`, `STA_Tamer.csv`, `Corridor_Tamer.csv`, `logo-mms.png`, `icon-192.png`, `icon-512.png`, `README.md`.

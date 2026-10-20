@@ -1,5 +1,5 @@
 {
-  "name": "CMM GeoCam 5.2.D",
+  "name": "CMM GeoCam 5.2.E",
   "short_name": "CMM GeoCam",
   "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom kontinu pinch 1x-4x, rekaman berkelanjutan dengan checkpoint IndexedDB dan ekspor satu video utuh, wake lock layar, GPS presisi 25 m, dan watermark",
   "start_url": "./",

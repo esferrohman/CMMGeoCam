@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.D</title>
+<title>CMM GeoCam 5.2.E</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1054,7 +1054,7 @@ canvas{display:none}
  .topbar .pill{padding:5px 8px}
 }
 
-/* 5.2.D: keep long-session archives readable. */
+/* 5.2.E: keep long-session archives readable. */
 .archive-part-details{margin-top:10px;color:#c6d0d9;font-size:11px}
 .archive-part-details summary{cursor:pointer;padding:8px 1px;user-select:none}
 .archive-part-details .archive-segments{max-height:150px;overflow-y:auto}
@@ -1185,7 +1185,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.2.D</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.2.E</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1273,7 +1273,7 @@ canvas{display:none}
          <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
          <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
        </div>
-       <p class="archive-intro"><b>Versi 5.2.D:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah rekaman selesai, pilih <b>Siapkan Video Utuh</b> → <b>Unduh Video</b> untuk satu MP4 (jika didukung) atau WebM. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
+       <p class="archive-intro"><b>Versi 5.2.E:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah rekaman selesai, pilih <b>Siapkan Video Utuh</b> → <b>Unduh Video</b> untuk satu MP4 (jika didukung) atau WebM. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
        <div class="archive-list" id="archiveList">Memuat rekaman...</div>
        <div class="archive-bottom">Jangan hapus data browser sebelum hasil berhasil diunduh dan diputar sampai akhir. Browser MP4 dapat menahan sebagian besar data hingga STOP; tutup paksa sebelum STOP masih berisiko kehilangan video. Blok checkpoint belum tentu bisa diputar sendiri. Saat aplikasi masuk background, sistem mencoba memfinalisasi rekaman.</div>
      </section>
@@ -1285,7 +1285,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.D";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.E";
 
 /* =========================================================
    CONFIG
@@ -1423,7 +1423,7 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-  Prototype 5.2.D: ONE continuous MediaRecorder with periodic checkpoints.
+  Prototype 5.2.E: ONE continuous MediaRecorder with periodic checkpoints.
   requestData() flushes browser-provided chunks into IndexedDB without
   stopping the encoder. Concatenating all chunks from this SAME recorder
   produces one playable file according to the MediaRecorder data contract.
@@ -2874,8 +2874,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.D"),
-        fetch("./Corridor_Tamer.csv?v=5.2.D")
+        fetch("./STA_Tamer.csv?v=5.2.E"),
+        fetch("./Corridor_Tamer.csv?v=5.2.E")
       ]);
 
     if(!staResponse.ok){
@@ -5555,10 +5555,25 @@ function preferredVideoFormat(){
    5.2.C — PERSISTENT VIDEO ARCHIVE (IndexedDB)
    No automatic browser downloads are triggered by segment rotation.
 ========================================================= */
+/* 5.2.E: Never reuse an IndexedDB connection once the browser has
+   started closing it. Reopening preserves the existing database and blobs. */
+let recordingDBConnection=null;
+function invalidateRecordingDB(db){
+  if(!db || recordingDBConnection===db){
+    recordingDBConnection=null;
+    recordingDBPromise=null;
+  }
+}
+function recordingDBIsClosingError(error){
+  const message=String(error && (error.message||error) || "");
+  return (error && error.name==="InvalidStateError") ||
+    /database connection is closing|database connection is closed|connection is closing|connection is closed/i.test(message);
+}
 function openRecordingDB(){
+  if(recordingDBConnection) return Promise.resolve(recordingDBConnection);
   if(recordingDBPromise) return recordingDBPromise;
   if(!window.indexedDB) return Promise.reject(new Error("IndexedDB tidak tersedia."));
-  recordingDBPromise=new Promise((resolve,reject)=>{
+  const pending=new Promise((resolve,reject)=>{
     const request=indexedDB.open(RECORDING_DB_NAME,RECORDING_DB_VERSION);
     request.onupgradeneeded=()=>{
       const db=request.result;
@@ -5570,30 +5585,52 @@ function openRecordingDB(){
     };
     request.onsuccess=()=>{
       const db=request.result;
-      db.onversionchange=()=>db.close();
+      recordingDBConnection=db;
+      db.onversionchange=()=>{
+        invalidateRecordingDB(db);
+        db.close();
+      };
+      // Some browsers dispatch close after unexpected storage shutdown.
+      db.onclose=()=>invalidateRecordingDB(db);
       resolve(db);
     };
     request.onerror=()=>reject(request.error||new Error("Database video gagal dibuka."));
-    request.onblocked=()=>reject(new Error("Database video terkunci tab lain."));
+    request.onblocked=()=>reject(new Error("Database video terkunci tab lain. Tutup tab CMM GeoCam lainnya, lalu coba lagi."));
   }).catch(error=>{
-    recordingDBPromise=null;
+    if(recordingDBPromise===pending) recordingDBPromise=null;
     throw error;
   });
-  return recordingDBPromise;
+  recordingDBPromise=pending;
+  return pending;
+}
+async function createRecordingTransaction(stores,mode){
+  // A closing connection rejects db.transaction() synchronously. Safely
+  // retry ONLY that failed transaction creation, not a committed write.
+  for(let attempt=0;attempt<2;attempt++){
+    const db=await openRecordingDB();
+    try{
+      return db.transaction(stores,mode);
+    }catch(error){
+      if(attempt!==0 || !recordingDBIsClosingError(error)) throw error;
+      invalidateRecordingDB(db);
+      try{db.close();}catch(e){}
+      console.warn("Reopening closed CMM GeoCam recording database",error);
+    }
+  }
+  throw new Error("Koneksi database rekaman tidak dapat dipulihkan.");
 }
 async function archiveGetAll(storeName){
-  const db=await openRecordingDB();
+  const tx=await createRecordingTransaction(storeName,"readonly");
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction(storeName,"readonly");
     const req=tx.objectStore(storeName).getAll();
     req.onsuccess=()=>resolve(req.result||[]);
     req.onerror=()=>reject(req.error||new Error("Gagal membaca arsip."));
+    tx.onabort=()=>reject(tx.error||new Error("Pembacaan arsip dibatalkan oleh browser."));
   });
 }
 async function archivePutSession(session){
-  const db=await openRecordingDB();
+  const tx=await createRecordingTransaction("sessions","readwrite");
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction("sessions","readwrite");
     tx.objectStore("sessions").put({...session});
     tx.oncomplete=resolve;
     tx.onerror=()=>reject(tx.error||new Error("Sesi gagal disimpan."));
@@ -5601,7 +5638,6 @@ async function archivePutSession(session){
   });
 }
 async function archiveSaveSegment(segment){
-  const db=await openRecordingDB();
   if(!activeRecordingSession) throw new Error("Sesi rekaman tidak tersedia.");
   const newSession={...activeRecordingSession,
     segmentCount:activeRecordingSession.segmentCount+1,
@@ -5609,9 +5645,9 @@ async function archiveSaveSegment(segment){
     savedDurationMs:activeRecordingSession.savedDurationMs+segment.durationMs,
     updatedAt:Date.now()
   };
+  const tx=await createRecordingTransaction(["sessions","segments"],"readwrite");
   await new Promise((resolve,reject)=>{
     // Atomic write: segment and updated session count are committed together.
-    const tx=db.transaction(["sessions","segments"],"readwrite");
     tx.objectStore("segments").put(segment);
     tx.objectStore("sessions").put(newSession);
     tx.oncomplete=resolve;
@@ -5624,9 +5660,8 @@ async function archiveSaveSegment(segment){
   toast(`Segmen ${segment.segmentIndex} tersimpan di arsip lokal.`);
 }
 async function archiveDeleteSession(sessionId){
-  const db=await openRecordingDB();
+  const tx=await createRecordingTransaction(["sessions","segments"],"readwrite");
   await new Promise((resolve,reject)=>{
-    const tx=db.transaction(["sessions","segments"],"readwrite");
     const segments=tx.objectStore("segments");
     const index=segments.index("sessionId");
     const req=index.openCursor(IDBKeyRange.only(sessionId));
@@ -5697,7 +5732,7 @@ function archiveDownloadLink(blob,filename,label){
 }
 function archiveZipMeta(session,segments){
   const isContinuous=session.recordingMode==="continuous";
-  return `CMM GeoCam 5.2.D\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
+  return `CMM GeoCam 5.2.E\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
 }
 /* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
    memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
@@ -5779,7 +5814,7 @@ async function prepareVideoZip(session,segments,button,actions){
 }
 
 /* ============================================================
-   5.2.D — ONE-FILE EXPORT (no transcode / no third-party library)
+   5.2.E — ONE-FILE EXPORT (no transcode / no third-party library)
    Every Blob MUST be a sequential dataavailable payload from the SAME
    uninterrupted MediaRecorder. This is forbidden for old 5.2.C files,
    which came from separate recorder instances and independent MP4 headers.
@@ -5944,7 +5979,15 @@ async function renderArchivePanel(){
       container.prepend(emergency);
     }
   }catch(err){
-    container.textContent="Arsip tidak dapat dibuka: "+(err.message||err);
+    container.replaceChildren();
+    const message=document.createElement("div");
+    message.className="archive-notice";
+    message.textContent="Arsip belum dapat dibuka: "+(err.message||err)+". Data rekaman tidak dihapus.";
+    const retry=createArchiveButton("Coba Buka Ulang Arsip","primary",async()=>{
+      retry.disabled=true;
+      await renderArchivePanel();
+    });
+    container.append(message,retry);
   }
 }
 async function openArchivePanel(){
@@ -6683,7 +6726,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.D")
+        .register("./service-worker.js?v=5.2.E")
         .catch(console.error);
     }
   );

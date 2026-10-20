@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v5-2-d-continuous-video";
+const CACHE_NAME = "cmm-geocam-v5-2-e-archive-connection";
 
 const APP_SHELL = [
   "./",
