@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.E</title>
+<title>CMM GeoCam 5.2.F</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1054,11 +1054,34 @@ canvas{display:none}
  .topbar .pill{padding:5px 8px}
 }
 
-/* 5.2.E: keep long-session archives readable. */
+/* 5.2.F: keep long-session archives readable. */
 .archive-part-details{margin-top:10px;color:#c6d0d9;font-size:11px}
 .archive-part-details summary{cursor:pointer;padding:8px 1px;user-select:none}
 .archive-part-details .archive-segments{max-height:150px;overflow-y:auto}
 .archive-download-ready.primary-video-download{border:2px solid #fff;box-shadow:0 3px 10px rgba(245,166,35,.28);font-weight:900}
+/* 5.2.F — Download after STOP, with a persistent one-tap fallback. */
+.auto-download-banner[hidden]{display:none !important}
+.auto-download-banner{
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);
+  transform:translateX(-50%);z-index:75;width:min(94vw,520px);
+  display:flex;flex-direction:column;gap:9px;padding:13px 15px;
+  color:#fff;background:rgba(20,26,32,.97);border:1px solid rgba(245,166,35,.54);
+  border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.56);
+  font-size:12px;line-height:1.4;
+}
+.auto-download-banner p{margin:0;font-weight:800}
+.auto-download-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.auto-download-actions a,.auto-download-actions button{
+  display:inline-flex;justify-content:center;align-items:center;min-height:39px;
+  padding:8px 13px;border-radius:10px;font-size:12px;font-weight:900;
+  text-decoration:none;cursor:pointer;
+}
+.auto-download-actions a{border:0;background:#f5a623;color:#111}
+.auto-download-actions a[hidden]{display:none !important}
+.auto-download-actions button{border:1px solid rgba(255,255,255,.24);color:#fff;background:#323b45}
+@media (orientation:landscape){
+  .auto-download-banner{bottom:calc(env(safe-area-inset-bottom) + 9px);max-width:min(55vw,480px)}
+}
 </style>
 </head>
 
@@ -1185,7 +1208,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.2.E</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.2.F</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1273,11 +1296,19 @@ canvas{display:none}
          <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
          <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
        </div>
-       <p class="archive-intro"><b>Versi 5.2.E:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah rekaman selesai, pilih <b>Siapkan Video Utuh</b> → <b>Unduh Video</b> untuk satu MP4 (jika didukung) atau WebM. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
+       <p class="archive-intro"><b>Versi 5.2.F:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah tombol <b>STOP</b> ditekan, aplikasi otomatis menyiapkan dan meminta unduhan satu MP4 (jika didukung) atau WebM. Jika unduhan tidak muncul, gunakan tombol <b>Unduh Ulang</b> atau ekspor dari Arsip. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
        <div class="archive-list" id="archiveList">Memuat rekaman...</div>
        <div class="archive-bottom">Jangan hapus data browser sebelum hasil berhasil diunduh dan diputar sampai akhir. Browser MP4 dapat menahan sebagian besar data hingga STOP; tutup paksa sebelum STOP masih berisiko kehilangan video. Blok checkpoint belum tentu bisa diputar sendiri. Saat aplikasi masuk background, sistem mencoba memfinalisasi rekaman.</div>
      </section>
    </div>
+   <aside class="auto-download-banner" id="autoDownloadBanner" hidden aria-live="polite">
+     <p id="autoDownloadMessage">Memproses video...</p>
+     <div class="auto-download-actions">
+       <a id="autoDownloadRetry" hidden>Unduh Ulang Video</a>
+       <button type="button" id="autoDownloadArchive">Buka Arsip</button>
+       <button type="button" id="autoDownloadDismiss">Tutup</button>
+     </div>
+   </aside>
    <canvas id="captureCanvas"></canvas>
   <canvas id="videoCanvas"></canvas>
   <canvas id="videoOverlayCanvas"></canvas>
@@ -1285,7 +1316,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.E";
+const CMM_GEOCAM_BUILD = "Prototype 5.2.F";
 
 /* =========================================================
    CONFIG
@@ -1423,7 +1454,7 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-  Prototype 5.2.E: ONE continuous MediaRecorder with periodic checkpoints.
+  Prototype 5.2.F: ONE continuous MediaRecorder with periodic checkpoints.
   requestData() flushes browser-provided chunks into IndexedDB without
   stopping the encoder. Concatenating all chunks from this SAME recorder
   produces one playable file according to the MediaRecorder data contract.
@@ -1456,6 +1487,11 @@ let archiveOpen = false;
 let archiveObjectURLs = [];
 let archiveTotalSegments = 0;
 let preparedZipURL = null;
+// Auto-export runs once after user STOP and after IndexedDB commits.
+let autoDownloadRequested=false;
+let autoDownloadObjectURL=null;
+let autoDownloadSessionId=null;
+
 
 // Native screen wake lock: requested only while landscape camera is active.
 let screenWakeSentinel = null;
@@ -2874,8 +2910,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.E"),
-        fetch("./Corridor_Tamer.csv?v=5.2.E")
+        fetch("./STA_Tamer.csv?v=5.2.F"),
+        fetch("./Corridor_Tamer.csv?v=5.2.F")
       ]);
 
     if(!staResponse.ok){
@@ -5555,7 +5591,7 @@ function preferredVideoFormat(){
    5.2.C — PERSISTENT VIDEO ARCHIVE (IndexedDB)
    No automatic browser downloads are triggered by segment rotation.
 ========================================================= */
-/* 5.2.E: Never reuse an IndexedDB connection once the browser has
+/* 5.2.F: Never reuse an IndexedDB connection once the browser has
    started closing it. Reopening preserves the existing database and blobs. */
 let recordingDBConnection=null;
 function invalidateRecordingDB(db){
@@ -5732,7 +5768,7 @@ function archiveDownloadLink(blob,filename,label){
 }
 function archiveZipMeta(session,segments){
   const isContinuous=session.recordingMode==="continuous";
-  return `CMM GeoCam 5.2.E\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
+  return `CMM GeoCam 5.2.F\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
 }
 /* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
    memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
@@ -5814,7 +5850,7 @@ async function prepareVideoZip(session,segments,button,actions){
 }
 
 /* ============================================================
-   5.2.E — ONE-FILE EXPORT (no transcode / no third-party library)
+   5.2.F — ONE-FILE EXPORT (no transcode / no third-party library)
    Every Blob MUST be a sequential dataavailable payload from the SAME
    uninterrupted MediaRecorder. This is forbidden for old 5.2.C files,
    which came from separate recorder instances and independent MP4 headers.
@@ -5917,7 +5953,7 @@ async function renderArchivePanel(){
     sessions.sort((a,b)=>b.startedAt-a.startedAt);
     if(!sessions.length && !emergencySegments.length){
       const none=document.createElement("div");none.className="archive-empty";
-      none.textContent="Belum ada rekaman. Setelah REC, potongan data disimpan tiap 30 detik dan file utuh siap diekspor sesudah STOP.";
+      none.textContent="Belum ada rekaman. STOP akan memfinalisasi rekaman, menyimpannya di arsip, dan meminta unduhan video utuh.";
       container.appendChild(none);
     }
     for(const session of sessions){
@@ -6014,9 +6050,79 @@ function queueSegmentPersistence(segment){
     catch(error){reportRecordingSaveError(error,segment);}
   });
 }
+/* 5.2.F: video is saved in IndexedDB BEFORE a single download attempt.
+   Chrome may refuse a delayed programmatic download; a visible link is kept
+   for a direct tap, and we never claim that the OS has saved the file. */
+function showAutoDownloadBanner(message,retryVisible=false){
+  const banner=$("autoDownloadBanner");
+  $("autoDownloadMessage").textContent=message;
+  $("autoDownloadRetry").hidden=!retryVisible;
+  banner.hidden=false;
+}
+function clearAutoDownloadLink(){
+  if(autoDownloadObjectURL){
+    URL.revokeObjectURL(autoDownloadObjectURL);
+    autoDownloadObjectURL=null;
+  }
+  autoDownloadSessionId=null;
+  const link=$("autoDownloadRetry");
+  link.removeAttribute("href");
+  link.hidden=true;
+}
+function requestAutoDownload(){
+  const link=$("autoDownloadRetry");
+  if(!link.href || !autoDownloadObjectURL || document.visibilityState!=="visible"){
+    return false;
+  }
+  // One download per user STOP. No silent repeated downloads.
+  try{link.click();return true;}
+  catch(error){console.warn("Auto download blocked:",error);return false;}
+}
+async function autoDownloadCompletedSession(sessionId){
+  showAutoDownloadBanner("Rekaman sudah diarsipkan. Menyiapkan satu file video untuk diunduh...");
+  try{
+    // Read from durable IndexedDB, not the recorder's transient memory.
+    const [sessions,allParts]=await Promise.all([
+      archiveGetAll("sessions"),archiveGetAll("segments")
+    ]);
+    const session=sessions.find(s=>s.id===sessionId);
+    if(!session) throw new Error("Sesi tidak ditemukan di arsip.");
+    const parts=allParts.filter(p=>p.sessionId===sessionId)
+      .sort((a,b)=>a.segmentIndex-b.segmentIndex);
+    const {blob,mime}=buildWholeRecordingBlob(session,parts);
+    // Keep a genuine tap-enabled download link for browsers that block .click().
+    clearAutoDownloadLink();
+    const url=URL.createObjectURL(blob);
+    autoDownloadObjectURL=url;
+    autoDownloadSessionId=sessionId;
+    const link=$("autoDownloadRetry");
+    link.href=url;
+    link.download=videoNameForSession(session,mime);
+    link.hidden=false;
+    const probe=await probeWholeVideo(blob);
+    const expectedSeconds=(session.endedAt-session.startedAt)/1000;
+    const suspiciousDuration=probe.status==="ok" && Number.isFinite(probe.duration)
+      && expectedSeconds>15 && probe.duration+Math.max(5,expectedSeconds*0.05)<expectedSeconds;
+    if(probe.status!=="ok" || suspiciousDuration){
+      showAutoDownloadBanner(`Video tersimpan dalam arsip, tetapi pemeriksaan durasi/format belum meyakinkan (${probe.status}). Jangan hapus arsip; gunakan Unduh Ulang lalu periksa file atau buka Arsip untuk cadangan.`,true);
+      return;
+    }
+    const attempted=requestAutoDownload();
+    showAutoDownloadBanner(attempted
+      ? `Video ${prettyBytes(blob.size)} siap. Unduhan telah diminta ke Chrome; periksa Downloads. Jika tidak muncul, tekan Unduh Ulang.`
+      : `Video ${prettyBytes(blob.size)} siap di arsip. Tekan Unduh Ulang Video untuk menyimpannya ke HP.`,true);
+  }catch(error){
+    console.error("Auto-export setelah STOP:",error);
+    showAutoDownloadBanner("Video telah diarsipkan, tetapi unduhan otomatis belum berhasil disiapkan: "+
+      (error.message||error)+". Buka Arsip untuk ekspor manual.");
+  }
+}
 async function finishRecordingToArchive(){
   if(recordingFinishing) return;
   recordingFinishing=true;
+  const sessionId=activeRecordingSession?.id||null;
+  const autoExport=autoDownloadRequested;
+  autoDownloadRequested=false;
   await recordingSaveQueue;
   try{
     if(activeRecordingSession){
@@ -6029,10 +6135,16 @@ async function finishRecordingToArchive(){
   activeRecordingSession=null;
   cleanupRecordingSession();
   updateArchiveCounters();
-  const outcome=recordingSaveError
-    ? "Penyimpanan bermasalah. Buka ARSIP VIDEO untuk pemulihan!"
-    : "Video tersimpan di ARSIP. Pilih Siapkan Video Utuh, lalu Unduh Video.";
-  toast(outcome);
+  if(recordingSaveError){
+    showAutoDownloadBanner("PENYIMPANAN VIDEO BERMASALAH. Jangan refresh atau hapus data. Buka Arsip untuk menyelamatkan data.");
+    toast("Arsip bermasalah! Buka Arsip Video.");
+  }else if(autoExport && sessionId){
+    // This is not guaranteed to retain the original click activation.
+    // Therefore leave a persistent link for manual retry.
+    await autoDownloadCompletedSession(sessionId);
+  }else{
+    toast("Rekaman tersimpan di ARSIP VIDEO. Buka Arsip untuk mengunduh.");
+  }
   if(archiveOpen) renderArchivePanel();
   recordingFinishing=false;
 }
@@ -6186,6 +6298,7 @@ function cleanupRecordingSession(){
   $("recTimer").textContent=
     "00:00:00";
 
+  $("shutter").disabled=false;
   $("shutter").setAttribute(
     "aria-label",
     "Mulai video"
@@ -6385,6 +6498,9 @@ async function startVideoRecording(){
     return;
   }
 
+  clearAutoDownloadLink();
+  $("autoDownloadBanner").hidden=true;
+  autoDownloadRequested=false;
   recordingSessionActive=true;
   recordingSegmentIndex=0;
 
@@ -6445,7 +6561,7 @@ async function startVideoRecording(){
   );
 }
 
-function stopVideoRecording(){
+function stopVideoRecording(reason="automatic"){
   if(!recordingSessionActive){
     return;
   }
@@ -6456,6 +6572,10 @@ function stopVideoRecording(){
     instead of opening another segment.
   */
   recordingSessionActive=false;
+  autoDownloadRequested=reason==="user";
+  $("shutter").disabled=true;
+  $("shutter").setAttribute("aria-label","Memfinalisasi video");
+  showAutoDownloadBanner("STOP diterima. Sedang memfinalisasi dan mengarsipkan video; jangan refresh halaman.");
 
   clearRecordingSegmentTimer();
 
@@ -6490,6 +6610,17 @@ $("locatorStartGPS").addEventListener("click",startGPS);
 $("recordingArchiveBtn").addEventListener("click",openArchivePanel);
 $("locatorArchiveBtn").addEventListener("click",openArchivePanel);
 $("archiveClose").addEventListener("click",closeArchivePanel);
+$("autoDownloadArchive").addEventListener("click",()=>{
+  $("autoDownloadBanner").hidden=true;
+  openArchivePanel();
+});
+$("autoDownloadDismiss").addEventListener("click",()=>{
+  $("autoDownloadBanner").hidden=true;
+});
+$("autoDownloadRetry").addEventListener("click",()=>{
+  // A direct user tap is more reliable than an async scripted click.
+  toast("Periksa Chrome Downloads. Jangan hapus arsip sebelum video terverifikasi.");
+});
 $("archiveLayer").addEventListener("click",event=>{if(event.target===$("archiveLayer")) closeArchivePanel();});
 document.querySelectorAll(".zoom-btn").forEach(button=>{
   button.addEventListener("click",()=>setCameraZoom(Number(button.dataset.zoom)));
@@ -6551,7 +6682,7 @@ $("shutter").addEventListener(
     }
 
     if(isRecording()){
-      stopVideoRecording();
+      stopVideoRecording("user");
     }else{
       startVideoRecording();
     }
@@ -6726,7 +6857,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.E")
+        .register("./service-worker.js?v=5.2.F")
         .catch(console.error);
     }
   );

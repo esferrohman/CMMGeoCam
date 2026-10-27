@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmm-geocam-v5-2-e-archive-connection";
+const CACHE_NAME = "cmm-geocam-v5-2-f-auto-export";
 
 const APP_SHELL = [
   "./",

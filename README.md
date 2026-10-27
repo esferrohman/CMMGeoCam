@@ -1,6 +1,6 @@
-# CMM GeoCam — Prototype 5.2.E
+# CMM GeoCam — Prototype 5.2.F
 
-**Rilis 5.2.E merupakan penggantian penamaan dari 5.2.D.1 (Archive Connection Fix).** Mekanisme perekaman, GPS, zoom, watermark, dan struktur database tidak diubah. Yang diperbarui adalah identitas build pada halaman, metadata PWA, versi URL file CSV, cache service worker, dan informasi versi yang disertakan dalam ekspor arsip.
+**Rilis 5.2.F melanjutkan 5.2.E dengan Auto-Download setelah STOP.** Sistem tetap merekam melalui satu MediaRecorder, menyimpan ke IndexedDB, lalu meminta unduhan satu video utuh secara otomatis setelah finalisasi. Perbaikan koneksi arsip 5.2.E tetap dipertahankan. GPS, zoom, watermark, dan skema database tidak berubah.
 
 ## Perbaikan arsip yang dipertahankan
 
@@ -12,21 +12,21 @@ Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase
 
 - Satu sesi REC menggunakan satu `MediaRecorder` berkelanjutan, sehingga setelah STOP normal, potongan data hasil satu recorder dapat disusun menjadi **satu file video** tanpa re-encoding.
 - Browser diminta mengeluarkan checkpoint setiap ~30 detik. Browser, terutama pada format MP4, dapat menunda data sampai STOP. **Checkpoint bukan jaminan pemulihan jika browser ditutup paksa.**
-- Arsip Video menawarkan **Siapkan Video Utuh → Unduh Video**. Format keluaran MP4 atau WebM mengikuti dukungan browser; jangan sekadar mengubah nama ekstensi.
+- Setelah STOP normal, aplikasi mencoba **unduh otomatis satu video utuh**. Jika browser tidak memulai unduhan, gunakan **Unduh Ulang Video** yang tampil langsung, atau masuk ke Arsip Video dan gunakan **Siapkan Video Utuh → Unduh Video** sebagai cadangan. Format keluaran MP4 atau WebM mengikuti dukungan browser; jangan sekadar mengubah ekstensi.
 - Arsip lama 5.2.C masih diekspor sebagai ZIP berisi segmen video mandiri. Menyatukan byte dari MP4 independen bukan metode penggabungan yang valid.
 - Rekaman yang dihentikan abnormal belum tentu lengkap. Periksa durasi dan pemutaran dari awal hingga akhir sebelum menghapus arsip lokal.
 
-## Cara memasang versi 5.2.E
+## Cara memasang versi 5.2.F
 
 1. Ekstrak ZIP dan **timpa seluruh berkas** di direktori GitHub Pages yang sama. Pastikan `index.html`, `manifest.webmanifest`, dan `service-worker.js` ikut terganti dan deploy telah berhasil.
-2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.2.E**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
+2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.2.F**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
 3. Pilih **Arsip Video** untuk memastikan sesi lama masih muncul dan dapat diekspor.
-4. Untuk uji baru, masuk landscape, aktifkan kamera, tunggu status READY, rekam 9–10 menit, tekan STOP, lalu pilih **Siapkan Video Utuh → Unduh Video**.
+4. Untuk uji baru, masuk landscape, aktifkan kamera, tunggu status READY, rekam 9–10 menit, lalu tekan STOP **satu kali**. Tunggu finalisasi. Periksa apakah unduhan otomatis muncul; jika tidak, tekan **Unduh Ulang Video** pada panel yang muncul. Jika perlu, gunakan ekspor dari Arsip.
 5. Cek durasi, seluruh isi video, logo/watermark, dan format file hasil ekspor. Ulangi uji 20–30 menit bila uji 10 menit berhasil.
 
 ## Perilaku yang tidak berubah
 
-| Komponen | Kondisi 5.2.E |
+| Komponen | Kondisi 5.2.F |
 |---|---|
 | GPS capture gate | `MAX_GPS_ACCURACY = 25` m saat memulai foto/video; bukan jaminan deviasi STA terhadap Ledger ≤25 m |
 | GPS saat REC | Penurunan kualitas GPS tidak otomatis menghentikan REC berjalan |
@@ -39,8 +39,19 @@ Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase
 
 ## Batasan validasi
 
-Perbaikan koneksi IndexedDB dan ekspor video sebelumnya telah diuji dalam simulasi Chromium. **5.2.E adalah perubahan versi tanpa perubahan fungsional baru**; kestabilan penyimpanan dan REC panjang tetap harus diuji langsung pada Android. Jika error penyimpanan berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen terdaftar.
+Kode 5.2.F lolos pemeriksaan sintaks, paket ZIP lolos uji integritas, dan simulasi STOP memastikan status sesi berubah menjadi completed, blok terbaca dari arsip, serta tautan Unduh Ulang terbentuk. Lingkungan browser pengujian tidak mengizinkan pengukuran keberhasilan unduhan sesungguhnya ke perangkat. **Kestabilan REC panjang dan pengunduhan otomatis masih perlu diuji langsung pada Android.** Auto-download tidak menyelesaikan kegagalan STOP/finalisasi pada MediaRecorder. Jika error berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen.
 
 ## Isi paket
 
 `index.html`, `manifest.webmanifest`, `service-worker.js`, `STA_Tamer.csv`, `Corridor_Tamer.csv`, `logo-mms.png`, `icon-192.png`, `icon-512.png`, `README.md`.
+
+
+## 5.2.F — Otomatis unduh setelah STOP
+
+- Tekan STOP satu kali. MediaRecorder difinalisasi dan seluruh blok video ditulis dulu ke IndexedDB.
+- Setelah status sesi `completed`, sistem menyusun satu berkas MP4/WebM dan mencoba mengunduh otomatis ke browser.
+- Karena unduhan setelah event asinkron tidak selalu diizinkan browser, panel **Unduh Ulang Video** tetap tersedia untuk satu ketukan manual.
+- Jangan menganggap unduhan otomatis berhasil hanya karena aplikasi meminta Chrome mengunduh. Periksa Downloads, durasi, dan pemutaran.
+- Jika IndexedDB gagal menyimpan, aplikasi TIDAK mengklaim unduhan sukses, dan menawarkan Arsip untuk pemulihan.
+- Arsip IndexedDB tetap disimpan sampai Inspector menghapusnya sendiri. Database dan format arsip 5.2.C/5.2.E tidak berubah.
+- Catatan: auto-download tidak menyelesaikan kegagalan MediaRecorder.onstop atau kehilangan data yang belum sempat ditulis ke penyimpanan. Untuk inspeksi penting, tetap lakukan pengujian lapangan dan dokumentasi cadangan.
