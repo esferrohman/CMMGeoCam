@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.2.F</title>
+<title>CMM GeoCam 5.3.G</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1054,12 +1054,12 @@ canvas{display:none}
  .topbar .pill{padding:5px 8px}
 }
 
-/* 5.2.F: keep long-session archives readable. */
+/* 5.3.G: keep long-session archives readable. */
 .archive-part-details{margin-top:10px;color:#c6d0d9;font-size:11px}
 .archive-part-details summary{cursor:pointer;padding:8px 1px;user-select:none}
 .archive-part-details .archive-segments{max-height:150px;overflow-y:auto}
 .archive-download-ready.primary-video-download{border:2px solid #fff;box-shadow:0 3px 10px rgba(245,166,35,.28);font-weight:900}
-/* 5.2.F — Download after STOP, with a persistent one-tap fallback. */
+/* 5.3.G — Download after STOP, with a persistent one-tap fallback. */
 .auto-download-banner[hidden]{display:none !important}
 .auto-download-banner{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);
@@ -1208,7 +1208,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.2.F</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.3.G</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1296,7 +1296,7 @@ canvas{display:none}
          <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
          <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
        </div>
-       <p class="archive-intro"><b>Versi 5.2.F:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah tombol <b>STOP</b> ditekan, aplikasi otomatis menyiapkan dan meminta unduhan satu MP4 (jika didukung) atau WebM. Jika unduhan tidak muncul, gunakan tombol <b>Unduh Ulang</b> atau ekspor dari Arsip. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
+       <p class="archive-intro"><b>Versi 5.3.G:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah tombol <b>STOP</b> ditekan, aplikasi otomatis menyiapkan dan meminta unduhan satu MP4 (jika didukung) atau WebM. Jika unduhan tidak muncul, gunakan tombol <b>Unduh Ulang</b> atau ekspor dari Arsip. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
        <div class="archive-list" id="archiveList">Memuat rekaman...</div>
        <div class="archive-bottom">Jangan hapus data browser sebelum hasil berhasil diunduh dan diputar sampai akhir. Browser MP4 dapat menahan sebagian besar data hingga STOP; tutup paksa sebelum STOP masih berisiko kehilangan video. Blok checkpoint belum tentu bisa diputar sendiri. Saat aplikasi masuk background, sistem mencoba memfinalisasi rekaman.</div>
      </section>
@@ -1316,7 +1316,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.2.F";
+const CMM_GEOCAM_BUILD = "Prototype 5.3.G";
 
 /* =========================================================
    CONFIG
@@ -1454,7 +1454,7 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-  Prototype 5.2.F: ONE continuous MediaRecorder with periodic checkpoints.
+  Prototype 5.3.G: ONE continuous MediaRecorder with periodic checkpoints.
   requestData() flushes browser-provided chunks into IndexedDB without
   stopping the encoder. Concatenating all chunks from this SAME recorder
   produces one playable file according to the MediaRecorder data contract.
@@ -2910,8 +2910,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.2.F"),
-        fetch("./Corridor_Tamer.csv?v=5.2.F")
+        fetch("./STA_Tamer.csv?v=5.3.G"),
+        fetch("./Corridor_Tamer.csv?v=5.3.G")
       ]);
 
     if(!staResponse.ok){
@@ -4708,13 +4708,25 @@ function drawCameraFrame(
   const sourcePerOutputY=
     cropH/canvas.height;
 
+  /*
+    EIS zoom compensation.
+    Total zoom (native x digital) narrows the output FOV, so the same
+    angular shake displaces more image. Previously the applied shift
+    scaled as ~1/zoom, so stabilization weakened as you zoomed in.
+    The required source-pixel shift is zoom-independent, so multiply by
+    the total requested zoom. The shift stays clamped to the overscan
+    margin, which still shrinks at high zoom (physical limit).
+    Field-tune EIS_GAIN_X/Y on-device; 1x behaviour is unchanged.
+  */
+  const eisZoomComp=Math.max(1,zoomRequested);
+
   const shiftX=
     isGyroEISActive()
       ? Math.max(
           -maxShiftX,
           Math.min(
             maxShiftX,
-            eisOffsetX*sourcePerOutputX
+            eisOffsetX*sourcePerOutputX*eisZoomComp
           )
         )
       : 0;
@@ -4725,7 +4737,7 @@ function drawCameraFrame(
           -maxShiftY,
           Math.min(
             maxShiftY,
-            eisOffsetY*sourcePerOutputY
+            eisOffsetY*sourcePerOutputY*eisZoomComp
           )
         )
       : 0;
@@ -5591,7 +5603,7 @@ function preferredVideoFormat(){
    5.2.C — PERSISTENT VIDEO ARCHIVE (IndexedDB)
    No automatic browser downloads are triggered by segment rotation.
 ========================================================= */
-/* 5.2.F: Never reuse an IndexedDB connection once the browser has
+/* 5.3.G: Never reuse an IndexedDB connection once the browser has
    started closing it. Reopening preserves the existing database and blobs. */
 let recordingDBConnection=null;
 function invalidateRecordingDB(db){
@@ -5768,7 +5780,7 @@ function archiveDownloadLink(blob,filename,label){
 }
 function archiveZipMeta(session,segments){
   const isContinuous=session.recordingMode==="continuous";
-  return `CMM GeoCam 5.2.F\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
+  return `CMM GeoCam 5.3.G\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
 }
 /* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
    memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
@@ -5850,7 +5862,7 @@ async function prepareVideoZip(session,segments,button,actions){
 }
 
 /* ============================================================
-   5.2.F — ONE-FILE EXPORT (no transcode / no third-party library)
+   5.3.G — ONE-FILE EXPORT (no transcode / no third-party library)
    Every Blob MUST be a sequential dataavailable payload from the SAME
    uninterrupted MediaRecorder. This is forbidden for old 5.2.C files,
    which came from separate recorder instances and independent MP4 headers.
@@ -6050,7 +6062,7 @@ function queueSegmentPersistence(segment){
     catch(error){reportRecordingSaveError(error,segment);}
   });
 }
-/* 5.2.F: video is saved in IndexedDB BEFORE a single download attempt.
+/* 5.3.G: video is saved in IndexedDB BEFORE a single download attempt.
    Chrome may refuse a delayed programmatic download; a visible link is kept
    for a direct tap, and we never claim that the OS has saved the file. */
 function showAutoDownloadBanner(message,retryVisible=false){
@@ -6857,7 +6869,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.2.F")
+        .register("./service-worker.js?v=5.3.G")
         .catch(console.error);
     }
   );

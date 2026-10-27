@@ -1,6 +1,15 @@
-# CMM GeoCam — Prototype 5.2.F
+# CMM GeoCam — Prototype 5.3.G
 
-**Rilis 5.2.F melanjutkan 5.2.E dengan Auto-Download setelah STOP.** Sistem tetap merekam melalui satu MediaRecorder, menyimpan ke IndexedDB, lalu meminta unduhan satu video utuh secara otomatis setelah finalisasi. Perbaikan koneksi arsip 5.2.E tetap dipertahankan. GPS, zoom, watermark, dan skema database tidak berubah.
+**Rilis 5.3.G dibangun langsung dari `index(6).html` yang diberikan pengguna (berbasis 5.2.F).** Satu-satunya perubahan fungsi terhadap build 5.2.F adalah **kompensasi koreksi GYRO EIS sesuai tingkat zoom** di `drawCameraFrame()`. Build, judul, label aplikasi, deskripsi manifest, versi fetch CSV, penanda registrasi service worker, dan nama cache telah diperbarui menjadi 5.3.G. Auto-Download setelah STOP dan perbaikan koneksi arsip 5.2.E tetap dipertahankan tanpa mengubah skema IndexedDB.
+
+## Baru di 5.3.G: EIS Zoom Compensation
+
+- Perubahan sumber: `const eisZoomComp=Math.max(1,zoomRequested);` dan `shiftX/shiftY` sekarang mengalikan koreksi dengan `eisZoomComp`.
+- Pada 1×, rumus tetap setara dengan sebelumnya; pada 2×, 4×, dan pinch zoom, koreksi gyro disesuaikan dengan zoom yang dipilih.
+- Hanya aktif jika **GYRO EIS** digunakan; tidak menyatakan Native EIS telah diperbaiki.
+- Koreksi tetap dibatasi `maxShiftX/maxShiftY` agar pergeseran tidak melebihi ruang crop. Zoom besar tidak menjamin stabilisasi lebih baik karena ruang crop makin sempit.
+- Kinerja stabilisasi saat zoom **belum teruji langsung pada smartphone**; perlu perbandingan video 1×/2×/4× di kondisi inspeksi yang sama.
+
 
 ## Perbaikan arsip yang dipertahankan
 
@@ -16,37 +25,37 @@ Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase
 - Arsip lama 5.2.C masih diekspor sebagai ZIP berisi segmen video mandiri. Menyatukan byte dari MP4 independen bukan metode penggabungan yang valid.
 - Rekaman yang dihentikan abnormal belum tentu lengkap. Periksa durasi dan pemutaran dari awal hingga akhir sebelum menghapus arsip lokal.
 
-## Cara memasang versi 5.2.F
+## Cara memasang versi 5.3.G
 
 1. Ekstrak ZIP dan **timpa seluruh berkas** di direktori GitHub Pages yang sama. Pastikan `index.html`, `manifest.webmanifest`, dan `service-worker.js` ikut terganti dan deploy telah berhasil.
-2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.2.F**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
+2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.3.G**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
 3. Pilih **Arsip Video** untuk memastikan sesi lama masih muncul dan dapat diekspor.
 4. Untuk uji baru, masuk landscape, aktifkan kamera, tunggu status READY, rekam 9–10 menit, lalu tekan STOP **satu kali**. Tunggu finalisasi. Periksa apakah unduhan otomatis muncul; jika tidak, tekan **Unduh Ulang Video** pada panel yang muncul. Jika perlu, gunakan ekspor dari Arsip.
 5. Cek durasi, seluruh isi video, logo/watermark, dan format file hasil ekspor. Ulangi uji 20–30 menit bila uji 10 menit berhasil.
 
 ## Perilaku yang tidak berubah
 
-| Komponen | Kondisi 5.2.F |
+| Komponen | Kondisi 5.3.G |
 |---|---|
 | GPS capture gate | `MAX_GPS_ACCURACY = 25` m saat memulai foto/video; bukan jaminan deviasi STA terhadap Ledger ≤25 m |
 | GPS saat REC | Penurunan kualitas GPS tidak otomatis menghentikan REC berjalan |
 | Jalur A/B mainline | Masih logika arah/tren lama; belum pemisahan alignment spasial per jalur |
 | Mode | Portrait = Auto-STA Locator; landscape = GeoCam 16:9 |
-| Kamera | Foto, video, watermark, stabilisasi, zoom 1×/2×/4× dan pinch-to-zoom |
+| Kamera | Foto, video, watermark, stabilisasi GYRO EIS dengan kompensasi zoom, zoom 1×/2×/4× dan pinch-to-zoom |
 | Screen Wake Lock | Diminta saat kamera landscape aktif; tergantung kemampuan Android/browser |
 | Arsip | IndexedDB pada domain/profil Chrome yang sama, dengan ekspor video utuh dan ZIP cadangan |
 | Database jalan | `STA_Tamer.csv` dan `Corridor_Tamer.csv` tidak berubah |
 
 ## Batasan validasi
 
-Kode 5.2.F lolos pemeriksaan sintaks, paket ZIP lolos uji integritas, dan simulasi STOP memastikan status sesi berubah menjadi completed, blok terbaca dari arsip, serta tautan Unduh Ulang terbentuk. Lingkungan browser pengujian tidak mengizinkan pengukuran keberhasilan unduhan sesungguhnya ke perangkat. **Kestabilan REC panjang dan pengunduhan otomatis masih perlu diuji langsung pada Android.** Auto-download tidak menyelesaikan kegagalan STOP/finalisasi pada MediaRecorder. Jika error berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen.
+Kode 5.3.G telah diperiksa sintaksnya dan integritas paket ZIP; perubahan EIS diverifikasi secara statis terhadap 5.2.F. Pengujian simulasi STOP yang disebut pada rilis 5.2.F adalah hasil versi sebelumnya, **bukan pengujian smartphone baru untuk 5.3.G**. **Kestabilan REC panjang, pengunduhan otomatis, dan EIS saat zoom masih perlu diuji langsung pada Android.** Auto-download tidak menyelesaikan kegagalan STOP/finalisasi pada MediaRecorder. Jika error berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen.
 
 ## Isi paket
 
 `index.html`, `manifest.webmanifest`, `service-worker.js`, `STA_Tamer.csv`, `Corridor_Tamer.csv`, `logo-mms.png`, `icon-192.png`, `icon-512.png`, `README.md`.
 
 
-## 5.2.F — Otomatis unduh setelah STOP
+## Fungsi 5.2.F yang dipertahankan — Otomatis unduh setelah STOP
 
 - Tekan STOP satu kali. MediaRecorder difinalisasi dan seluruh blok video ditulis dulu ke IndexedDB.
 - Setelah status sesi `completed`, sistem menyusun satu berkas MP4/WebM dan mencoba mengunduh otomatis ke browser.
@@ -55,3 +64,7 @@ Kode 5.2.F lolos pemeriksaan sintaks, paket ZIP lolos uji integritas, dan simula
 - Jika IndexedDB gagal menyimpan, aplikasi TIDAK mengklaim unduhan sukses, dan menawarkan Arsip untuk pemulihan.
 - Arsip IndexedDB tetap disimpan sampai Inspector menghapusnya sendiri. Database dan format arsip 5.2.C/5.2.E tidak berubah.
 - Catatan: auto-download tidak menyelesaikan kegagalan MediaRecorder.onstop atau kehilangan data yang belum sempat ditulis ke penyimpanan. Untuk inspeksi penting, tetap lakukan pengujian lapangan dan dokumentasi cadangan.
+
+## Catatan kompatibilitas khusus
+
+Jangan hapus data situs/PWA ketika memperbarui dari 5.2.C–5.2.F. Tetap gunakan origin GitHub Pages dan profil Chrome yang sama untuk mengakses rekaman tersimpan. 5.3.G tidak memperbaiki sepenuhnya kegagalan STOP/finalisasi `MediaRecorder` yang dilaporkan pada uji lapangan; rekaman penting masih sebaiknya dicadangkan memakai kamera bawaan hingga ketahanan aplikasi teruji.
