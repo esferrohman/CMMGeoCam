@@ -1,8 +1,44 @@
-# CMM GeoCam — Prototype 5.3.G
+# CMM GeoCam 5.3.I — WYSIWYG (What You See Is What You Get)
 
-**Rilis 5.3.G dibangun langsung dari `index(6).html` yang diberikan pengguna (berbasis 5.2.F).** Satu-satunya perubahan fungsi terhadap build 5.2.F adalah **kompensasi koreksi GYRO EIS sesuai tingkat zoom** di `drawCameraFrame()`. Build, judul, label aplikasi, deskripsi manifest, versi fetch CSV, penanda registrasi service worker, dan nama cache telah diperbarui menjadi 5.3.G. Auto-Download setelah STOP dan perbaikan koneksi arsip 5.2.E tetap dipertahankan tanpa mengubah skema IndexedDB.
+## Perubahan utama
 
-## Baru di 5.3.G: EIS Zoom Compensation
+- **Preview sekarang berasal langsung dari canvas yang sama dengan sumber MediaRecorder** (`videoCanvas`, 1280×720), sehingga sudut pandang, crop digital, pergeseran Gyro EIS, logo, STA/Jalur, dan metadata watermark terlihat langsung sebagaimana dirender ke video.
+- Output foto tetap 1920×1080. Perhitungan offset gyro pada `drawCameraFrame` diseragamkan terhadap referensi 1280×720, sehingga foto dan preview memilih area sumber kamera **yang sama** walaupun resolusinya berbeda.
+- Rasio preview dikunci **16:9** dengan `object-fit:contain`, tanpa `object-fit:cover` atau CSS `scale()` tambahan. Sisi kanan dicadangkan bagi tombol foto/video, zoom, dan pinch. Pada layar yang lebih lebar/sempit bisa muncul bingkai hitam, **bukan cropping foto**.
+- Tampilan teks watermark lama yang mengambang disembunyikan hanya ketika kamera landscape aktif, karena watermark yang benar sudah terlukis di canvas yang sama dengan hasil simpan. Kontrol status, diagnosa, dan pilihan CUACA tetap aktif sebagai UI, tidak ikut terekam.
+- Loop komposisi frame berjalan sejak kamera dibuka, bukan hanya saat REC; berhenti saat layar tidak aktif/portrait dan dilanjutkan ketika kembali landscape. Ada timer fallback ketika callback frame browser terhenti.
+- GPS, database jalan, stabilisasi, sistem arsip dan sistem unduhan Android/Safari **tidak diubah**. Tidak ada perubahan skema IndexedDB.
+
+## Uji lapangan wajib
+
+1. Di Android Chrome dan Safari iPhone, buka kamera landscape, foto objek pada **1×/2×/4×**, cocokkan batas kiri, kanan, atas, bawah preview dengan hasil foto.
+2. Ulangi saat **STAB: GYRO** aktif, gerakkan kamera pelan: komposisi harus mengikuti preview tanpa loncatan crop.
+3. Rekam video pendek 30–60 detik dan periksa frame pertama/terakhir, watermark, durasi, dan penyimpanan. Lanjutkan 5–10 menit jika berhasil.
+4. Pastikan pinch-to-zoom, tombol cuaca, dan shutter masih berfungsi.
+
+**Batasan:** Test sintaks dan logika dapat dilakukan di desktop; kinerja frame dan perilaku Safari/Chrome pada HP yang sebenarnya tetap membutuhkan uji perangkat. Pembaruan ini bukan perbaikan untuk kegagalan STOP/MediaRecorder. Arsip lama tetap berada di profil browser/domain yang sama; jangan hapus data situs sebelum ekspor.
+
+---
+
+# CMM GeoCam — Prototype 5.3.I (Safari Save)
+
+## Perubahan pada 5.3.I
+
+- **Safari iPhone/iPad:** setelah STOP berhasil, video lebih dulu difinalisasi dan ditulis ke **Arsip GeoCam (IndexedDB)**. Aplikasi menampilkan **Simpan Video ke iPhone** yang memanggil Share Sheet iOS melalui klik nyata; pilih **Simpan Video** atau **Simpan ke File**, jika pilihan tersedia. Safari tidak memberikan akses untuk menyimpan diam-diam langsung ke galeri.
+- **Foto Safari:** tombol **Simpan Foto ke iPhone** menawarkan Share Sheet (atau unduh manual sebagai fallback). **Foto belum diarsipkan secara permanen** dalam aplikasi: jangan refresh sebelum disimpan.
+- **Arsip lama:** sesi continuous yang statusnya completed dapat langsung memakai **Simpan ke iPhone** dari panel Arsip bila Web Share Files didukung, tanpa perlu tombol *Siapkan Video Utuh*.
+- **Android/Chrome:** mekanisme otomatis meminta unduh setelah STOP tetap dipertahankan, dengan link fallback. Sistem tidak bisa mengonfirmasi file masuk ke Downloads.
+- Database `CMMGeoCamRecordings`, skema v1, `sessions` / `segments` **tidak berubah**. Semua data lama tetap kompatibel selama URL/domain dan profil browser sama.
+- **Batasan penting:** penyimpanan IndexedDB dapat dibersihkan iOS ketika storage penuh/tereviksi; ini bukan penyimpanan permanen Photos/Files. Versi ini juga belum menjamin pemulihan kalau MediaRecorder gagal STOP atau browser tertutup sebelum finalisasi. Uji langsung di Safari iOS masih diperlukan.
+- **Penting untuk pengujian:** setelah STOP, pastikan status selesai, gunakan Simpan ke iPhone, lalu cek video benar-benar ada di Foto/Files beserta durasinya sebelum hapus arsip.
+
+---
+
+# CMM GeoCam — Prototype 5.3.I
+
+Basis 5.3.G berasal dari `index(6).html` dengan kompensasi GYRO EIS saat zoom. Rilis 5.3.I menambahkan **jalur ekspor iOS/iPadOS via Share Sheet untuk foto dan video**. Auto-download Chrome dan penyimpanan IndexedDB untuk video tetap dipertahankan. Tidak ada perubahan skema database atau alignment GPS.
+
+## Baru di 5.3.I: EIS Zoom Compensation
 
 - Perubahan sumber: `const eisZoomComp=Math.max(1,zoomRequested);` dan `shiftX/shiftY` sekarang mengalikan koreksi dengan `eisZoomComp`.
 - Pada 1×, rumus tetap setara dengan sebelumnya; pada 2×, 4×, dan pinch zoom, koreksi gyro disesuaikan dengan zoom yang dipilih.
@@ -25,17 +61,17 @@ Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase
 - Arsip lama 5.2.C masih diekspor sebagai ZIP berisi segmen video mandiri. Menyatukan byte dari MP4 independen bukan metode penggabungan yang valid.
 - Rekaman yang dihentikan abnormal belum tentu lengkap. Periksa durasi dan pemutaran dari awal hingga akhir sebelum menghapus arsip lokal.
 
-## Cara memasang versi 5.3.G
+## Cara memasang versi 5.3.I
 
 1. Ekstrak ZIP dan **timpa seluruh berkas** di direktori GitHub Pages yang sama. Pastikan `index.html`, `manifest.webmanifest`, dan `service-worker.js` ikut terganti dan deploy telah berhasil.
-2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.3.G**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
+2. Buka kembali situs di Chrome. Periksa tampilan portrait: **CMM GEOCAM 5.3.I**. Pembaruan service worker dapat memerlukan buka ulang tab. Jangan hapus data situs untuk memaksa pembaruan.
 3. Pilih **Arsip Video** untuk memastikan sesi lama masih muncul dan dapat diekspor.
 4. Untuk uji baru, masuk landscape, aktifkan kamera, tunggu status READY, rekam 9–10 menit, lalu tekan STOP **satu kali**. Tunggu finalisasi. Periksa apakah unduhan otomatis muncul; jika tidak, tekan **Unduh Ulang Video** pada panel yang muncul. Jika perlu, gunakan ekspor dari Arsip.
 5. Cek durasi, seluruh isi video, logo/watermark, dan format file hasil ekspor. Ulangi uji 20–30 menit bila uji 10 menit berhasil.
 
 ## Perilaku yang tidak berubah
 
-| Komponen | Kondisi 5.3.G |
+| Komponen | Kondisi 5.3.I |
 |---|---|
 | GPS capture gate | `MAX_GPS_ACCURACY = 25` m saat memulai foto/video; bukan jaminan deviasi STA terhadap Ledger ≤25 m |
 | GPS saat REC | Penurunan kualitas GPS tidak otomatis menghentikan REC berjalan |
@@ -48,7 +84,7 @@ Menangani error Chrome Android: `Failed to execute 'transaction' on 'IDBDatabase
 
 ## Batasan validasi
 
-Kode 5.3.G telah diperiksa sintaksnya dan integritas paket ZIP; perubahan EIS diverifikasi secara statis terhadap 5.2.F. Pengujian simulasi STOP yang disebut pada rilis 5.2.F adalah hasil versi sebelumnya, **bukan pengujian smartphone baru untuk 5.3.G**. **Kestabilan REC panjang, pengunduhan otomatis, dan EIS saat zoom masih perlu diuji langsung pada Android.** Auto-download tidak menyelesaikan kegagalan STOP/finalisasi pada MediaRecorder. Jika error berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen.
+Kode 5.3.I telah diperiksa sintaksnya dan integritas paket ZIP; perubahan EIS diverifikasi secara statis terhadap 5.2.F. Pengujian simulasi STOP yang disebut pada rilis 5.2.F adalah hasil versi sebelumnya, **bukan pengujian smartphone baru untuk 5.3.I**. **Kestabilan REC panjang, pengunduhan otomatis, dan EIS saat zoom masih perlu diuji langsung pada Android.** Auto-download tidak menyelesaikan kegagalan STOP/finalisasi pada MediaRecorder. Jika error berulang, jangan bersihkan data browser; dokumentasikan pesan error, durasi REC, dan jumlah segmen.
 
 ## Isi paket
 
@@ -67,4 +103,4 @@ Kode 5.3.G telah diperiksa sintaksnya dan integritas paket ZIP; perubahan EIS di
 
 ## Catatan kompatibilitas khusus
 
-Jangan hapus data situs/PWA ketika memperbarui dari 5.2.C–5.2.F. Tetap gunakan origin GitHub Pages dan profil Chrome yang sama untuk mengakses rekaman tersimpan. 5.3.G tidak memperbaiki sepenuhnya kegagalan STOP/finalisasi `MediaRecorder` yang dilaporkan pada uji lapangan; rekaman penting masih sebaiknya dicadangkan memakai kamera bawaan hingga ketahanan aplikasi teruji.
+Jangan hapus data situs/PWA ketika memperbarui dari 5.2.C–5.2.F. Tetap gunakan origin GitHub Pages dan profil Chrome yang sama untuk mengakses rekaman tersimpan. 5.3.I tidak memperbaiki sepenuhnya kegagalan STOP/finalisasi `MediaRecorder` yang dilaporkan pada uji lapangan; rekaman penting masih sebaiknya dicadangkan memakai kamera bawaan hingga ketahanan aplikasi teruji.

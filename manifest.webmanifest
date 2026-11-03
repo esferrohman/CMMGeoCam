@@ -1,7 +1,7 @@
 {
-  "name": "CMM GeoCam 5.3.G",
+  "name": "CMM GeoCam 5.3.I",
   "short_name": "CMM GeoCam",
-  "description": "GPS Auto-STA portrait + GeoCam landscape dengan zoom kontinu pinch 1x-4x, rekaman berkelanjutan dengan checkpoint IndexedDB dan ekspor video utuh otomatis setelah STOP, wake lock layar, kompensasi stabilisasi gyro saat zoom, GPS presisi 25 m, dan watermark",
+  "description": "GPS Auto-STA, GeoCam landscape WYSIWYG 16:9, zoom EIS, arsip IndexedDB, unduhan setelah STOP, dan ekspor foto/video iOS melalui Share Sheet dengan satu ketukan.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

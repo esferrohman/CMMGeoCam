@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0f11">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>CMM GeoCam 5.3.G</title>
+<title>CMM GeoCam 5.3.I</title>
 <style>
 :root{
   --bg:#090b0d; --panel:rgba(10,12,14,.58); --line:rgba(255,255,255,.20);
@@ -1054,12 +1054,12 @@ canvas{display:none}
  .topbar .pill{padding:5px 8px}
 }
 
-/* 5.3.G: keep long-session archives readable. */
+/* 5.3.I: keep long-session archives readable. */
 .archive-part-details{margin-top:10px;color:#c6d0d9;font-size:11px}
 .archive-part-details summary{cursor:pointer;padding:8px 1px;user-select:none}
 .archive-part-details .archive-segments{max-height:150px;overflow-y:auto}
 .archive-download-ready.primary-video-download{border:2px solid #fff;box-shadow:0 3px 10px rgba(245,166,35,.28);font-weight:900}
-/* 5.3.G — Download after STOP, with a persistent one-tap fallback. */
+/* 5.3.I — Download after STOP, with a persistent one-tap fallback. */
 .auto-download-banner[hidden]{display:none !important}
 .auto-download-banner{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);
@@ -1077,11 +1077,76 @@ canvas{display:none}
   text-decoration:none;cursor:pointer;
 }
 .auto-download-actions a{border:0;background:#f5a623;color:#111}
-.auto-download-actions a[hidden]{display:none !important}
+.auto-download-actions a[hidden],.auto-download-actions button[hidden]{display:none !important}
+.auto-download-actions .ios-save-button{background:#f5a623;color:#111;border:2px solid #fff}
 .auto-download-actions button{border:1px solid rgba(255,255,255,.24);color:#fff;background:#323b45}
 @media (orientation:landscape){
   .auto-download-banner{bottom:calc(env(safe-area-inset-bottom) + 9px);max-width:min(55vw,480px)}
 }
+
+/* ===========================================================
+   5.3.I - WYSIWYG camera view.
+   The exact 1280x720 output canvas is also the ON-SCREEN preview.
+   No CSS cover crop or scale: the entire 16:9 frame remains visible.
+   Reserve room for the shutter/zoom controls on the right.
+   =========================================================== */
+@media (orientation:landscape){
+  .app.camera-ready{
+    --camera-control-rail:clamp(148px,17vw,190px);
+    background:#050607;
+  }
+  .app.camera-ready #preview,
+  .app.camera-ready #videoCanvas{
+    position:absolute;
+    inset:0 auto auto 0;
+    width:calc(100% - var(--camera-control-rail));
+    height:100%;
+    object-fit:contain !important;
+    transform:none !important;
+    background:#050607;
+  }
+  /* Source <video> remains mounted for requestVideoFrameCallback. */
+  .app.camera-ready #preview{z-index:0;pointer-events:none}
+  .app.camera-ready #videoCanvas{
+    display:block;
+    z-index:1;
+    touch-action:none;
+    overscroll-behavior:contain;
+  }
+  /* Location, weather, timestamp and logo are already burned into
+     the shared live/recording canvas, avoiding duplicate overlays. */
+  .app.camera-ready .top-info,
+  .app.camera-ready .tech-info,
+  .app.camera-ready .mms-logo{display:none !important}
+  .app.camera-ready .topbar{
+    left:12px;
+    top:clamp(76px,16vh,106px);
+    gap:4px;
+    max-width:calc(100vw - 172px);
+  }
+  .app.camera-ready .topbar .pill{padding:5px 8px}
+  .app.camera-ready .weather-toolbar{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    padding:5px 8px;
+    align-items:flex-start;
+    font-size:9px;
+    font-weight:800;
+  }
+  .app.camera-ready .weather-toolbar select{
+    max-width:126px;
+    font-size:9px;
+    padding:3px;
+  }
+  .app.camera-ready .capture-controls{
+    right:max(12px,env(safe-area-inset-right)) !important;
+  }
+}
+@media (orientation:portrait){
+  #videoCanvas{display:none !important}
+}
+
 </style>
 </head>
 
@@ -1116,6 +1181,19 @@ canvas{display:none}
     </button>
     <div class="pill wake-pill off" id="wakeStatus" aria-live="off">LAYAR: CHECK</div>
     <button class="pill archive-trigger" id="recordingArchiveBtn" type="button">ARSIP VIDEO · 0</button>
+    <div class="pill weather-toolbar"><span>CUACA</span>
+      <select
+        id="weatherSelect"
+        class="weather-select"
+        aria-label="Kondisi cuaca">
+        <option value="AUTO">AUTO · MENUNGGU</option>
+        <option value="CERAH">CERAH</option>
+        <option value="BERAWAN">BERAWAN</option>
+        <option value="GERIMIS">GERIMIS</option>
+        <option value="HUJAN">HUJAN</option>
+        <option value="HUJAN LEBAT">HUJAN LEBAT</option>
+      </select>
+    </div>
   </div>
 
   <div class="diag-panel" id="diagPanel">
@@ -1170,17 +1248,7 @@ canvas{display:none}
       <span id="dateTimeValue">--/--/---- --:--:--</span>
       <span class="context-separator">•</span>
       <span>CUACA</span>
-      <select
-        id="weatherSelect"
-        class="weather-select"
-        aria-label="Kondisi cuaca">
-        <option value="AUTO">AUTO · MENUNGGU</option>
-        <option value="CERAH">CERAH</option>
-        <option value="BERAWAN">BERAWAN</option>
-        <option value="GERIMIS">GERIMIS</option>
-        <option value="HUJAN">HUJAN</option>
-        <option value="HUJAN LEBAT">HUJAN LEBAT</option>
-      </select>
+
     </div>
 
     <div class="tech-line">
@@ -1208,7 +1276,7 @@ canvas{display:none}
     <header class="locator-header">
       <img class="locator-logo" src="./logo-mms.png" alt="ASTRA Infra Toll Road Tangerang-Merak">
       <div class="locator-header-text">
-        <div class="locator-brand">CMM GEOCAM <span>5.3.G</span></div>
+        <div class="locator-brand">CMM GEOCAM <span>5.3.I</span></div>
         <div class="locator-subtitle">GPS AUTO-STA LOCATOR</div>
       </div>
     </header>
@@ -1296,7 +1364,7 @@ canvas{display:none}
          <h2 id="archiveTitle">Arsip Rekaman Lokal</h2>
          <button class="archive-close" id="archiveClose" type="button">Tutup ✕</button>
        </div>
-       <p class="archive-intro"><b>Versi 5.3.G:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah tombol <b>STOP</b> ditekan, aplikasi otomatis menyiapkan dan meminta unduhan satu MP4 (jika didukung) atau WebM. Jika unduhan tidak muncul, gunakan tombol <b>Unduh Ulang</b> atau ekspor dari Arsip. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
+       <p class="archive-intro"><b>Versi 5.3.I:</b> satu rekaman kontinu. Aplikasi meminta checkpoint setiap 30 detik; browser bisa menunda keluarnya data sampai STOP. Setelah tombol <b>STOP</b> ditekan, aplikasi otomatis menyiapkan satu file video MP4/WebM berdasarkan format yang didukung. Pada iPhone/iPad, video disimpan dahulu di Arsip GeoCam lalu tombol <b>Simpan ke iPhone</b> membuka menu berbagi untuk memilih Foto atau Files. Safari tidak dapat menjamin unduhan otomatis. Untuk browser lain, tersedia unduhan otomatis dan tombol unduh ulang. Arsip 5.2.C lama tetap dapat diekspor sebagai ZIP.</p>
        <div class="archive-list" id="archiveList">Memuat rekaman...</div>
        <div class="archive-bottom">Jangan hapus data browser sebelum hasil berhasil diunduh dan diputar sampai akhir. Browser MP4 dapat menahan sebagian besar data hingga STOP; tutup paksa sebelum STOP masih berisiko kehilangan video. Blok checkpoint belum tentu bisa diputar sendiri. Saat aplikasi masuk background, sistem mencoba memfinalisasi rekaman.</div>
      </section>
@@ -1304,7 +1372,8 @@ canvas{display:none}
    <aside class="auto-download-banner" id="autoDownloadBanner" hidden aria-live="polite">
      <p id="autoDownloadMessage">Memproses video...</p>
      <div class="auto-download-actions">
-       <a id="autoDownloadRetry" hidden>Unduh Ulang Video</a>
+        <button type="button" id="autoIOSSave" class="ios-save-button" hidden>Simpan ke iPhone</button>
+        <a id="autoDownloadRetry" hidden>Unduh Video</a>
        <button type="button" id="autoDownloadArchive">Buka Arsip</button>
        <button type="button" id="autoDownloadDismiss">Tutup</button>
      </div>
@@ -1316,7 +1385,7 @@ canvas{display:none}
 </div>
 
 <script>
-const CMM_GEOCAM_BUILD = "Prototype 5.3.G";
+const CMM_GEOCAM_BUILD = "Prototype 5.3.I";
 
 /* =========================================================
    CONFIG
@@ -1454,7 +1523,7 @@ let recorderUsesSingleFinalBlob = false;
 let recordingContextForFilename = "LOCATION";
 
 /*
-  Prototype 5.3.G: ONE continuous MediaRecorder with periodic checkpoints.
+  Prototype 5.3.I: ONE continuous MediaRecorder with periodic checkpoints.
   requestData() flushes browser-provided chunks into IndexedDB without
   stopping the encoder. Concatenating all chunks from this SAME recorder
   produces one playable file according to the MediaRecorder data contract.
@@ -1491,6 +1560,8 @@ let preparedZipURL = null;
 let autoDownloadRequested=false;
 let autoDownloadObjectURL=null;
 let autoDownloadSessionId=null;
+// 5.3.I: native iOS Share Sheet requires a direct user tap.
+let pendingNativeSaveFile=null;
 
 
 // Native screen wake lock: requested only while landscape camera is active.
@@ -2910,8 +2981,8 @@ async function loadDatabase(){
   try{
     const [staResponse,corridorResponse]=
       await Promise.all([
-        fetch("./STA_Tamer.csv?v=5.3.G"),
-        fetch("./Corridor_Tamer.csv?v=5.3.G")
+        fetch("./STA_Tamer.csv?v=5.3.I"),
+        fetch("./Corridor_Tamer.csv?v=5.3.I")
       ]);
 
     if(!staResponse.ok){
@@ -4387,6 +4458,15 @@ async function startCamera(){
     $("empty").classList.add("hidden");
     document.querySelector(".app").classList.add("camera-ready");
 
+    // 5.3.I: the same composited canvas is displayed while taking photos
+    // and while recording videos. 16:9 and EIS framing cannot diverge.
+    const liveCanvas=$("videoCanvas");
+    if(liveCanvas.width!==VIDEO_WIDTH) liveCanvas.width=VIDEO_WIDTH;
+    if(liveCanvas.height!==VIDEO_HEIGHT) liveCanvas.height=VIDEO_HEIGHT;
+    await ensureWatermarkLogo();
+    overlayDirty=true;
+    startPreviewFrameLoop();
+
     startGPS();
     updateStabilizerUI();
     syncScreenWakeLock();
@@ -4579,10 +4659,9 @@ function updateZoomUI(){
     : "DIGITAL";
   $("zoomLabel").textContent=`${zoomRequested.toFixed(2).replace(/0$/, "")}× · ${mode}`;
 
-  // Native camera zoom modifies the input track. Canvas renders the same
-  // remaining centered digital crop used in the onscreen preview.
-  const previewScale=zoomDigitalRatio() * (isGyroEISActive()?1/EIS_CROP_RATIO:1);
-  $("preview").style.transform=`scale(${previewScale.toFixed(5)})`;
+  // 5.3.I: the preview IS the composited recording canvas. Never apply
+  // an independent CSS zoom or EIS crop to the source <video>.
+  $("preview").style.transform="none";
 }
 
 function resetNativeZoomState(){
@@ -4702,11 +4781,11 @@ function drawCameraFrame(
   const maxShiftX=Math.max(0,(digitalW-cropW)/2);
   const maxShiftY=Math.max(0,(digitalH-cropH)/2);
 
-  const sourcePerOutputX=
-    cropW/canvas.width;
-
-  const sourcePerOutputY=
-    cropH/canvas.height;
+  // Gyro offsets are calibrated in VIDEO_WIDTH x VIDEO_HEIGHT pixels.
+  // Use that same reference for photo (1920x1080), video (1280x720),
+  // and the WYSIWYG preview, so they select the identical source crop.
+  const sourcePerVideoX=cropW/VIDEO_WIDTH;
+  const sourcePerVideoY=cropH/VIDEO_HEIGHT;
 
   /*
     EIS zoom compensation.
@@ -4726,7 +4805,7 @@ function drawCameraFrame(
           -maxShiftX,
           Math.min(
             maxShiftX,
-            eisOffsetX*sourcePerOutputX*eisZoomComp
+            eisOffsetX*sourcePerVideoX*eisZoomComp
           )
         )
       : 0;
@@ -4737,7 +4816,7 @@ function drawCameraFrame(
           -maxShiftY,
           Math.min(
             maxShiftY,
-            eisOffsetY*sourcePerOutputY*eisZoomComp
+            eisOffsetY*sourcePerVideoY*eisZoomComp
           )
         )
       : 0;
@@ -5359,6 +5438,7 @@ function compositeVideoFrame(){
     canvas.width,
     canvas.height
   );
+  previewLastFrameAt=performance.now();
 
   /*
     Manual mode: only push a frame AFTER compositing is complete.
@@ -5375,72 +5455,68 @@ function compositeVideoFrame(){
   }
 }
 
+// 5.3.I - ONE frame compositor for preview/photo/video. No second CSS crop.
+let previewFrameLoopActive=false;
+let previewFrameFallbackForced=false;
+let previewFrameWatchdog=null;
+let previewLastFrameAt=0;
+function shouldRunPreviewFrames(){
+  return !!mediaStream && isLandscapeMode() &&
+    document.visibilityState==="visible" && $("preview").readyState>=2;
+}
+function startPreviewFrameLoop(){
+  if(previewFrameLoopActive || !shouldRunPreviewFrames()) return;
+  previewFrameLoopActive=true;
+  previewFrameFallbackForced=false;
+  compositeVideoFrame();
+  scheduleVideoFrames();
+  // A browser may throttle rVFC for a <video> covered by a canvas.
+  // Fall back to a 30 fps timer if callbacks stop arriving.
+  previewFrameWatchdog=setInterval(()=>{
+    if(!previewFrameLoopActive || previewFrameFallbackForced) return;
+    if(performance.now()-previewLastFrameAt<900) return;
+    const video=$("preview");
+    if(videoFrameCallbackId!==null &&
+      typeof video.cancelVideoFrameCallback==="function"){
+      try{video.cancelVideoFrameCallback(videoFrameCallbackId);}catch(e){}
+    }
+    videoFrameCallbackId=null;
+    previewFrameFallbackForced=true;
+    console.warn("CMM GeoCam: live preview changed to 30fps timer fallback");
+    scheduleVideoFrames();
+  },350);
+}
 function scheduleVideoFrames(){
-  if(!isRecording()){
-    return;
-  }
-
+  if(!previewFrameLoopActive) return;
   const video=$("preview");
-
-  if(
-    typeof video.requestVideoFrameCallback==="function"
-  ){
-    /*
-      No artificial 30 fps gate here.
-      requestVideoFrameCallback already fires when a real camera frame
-      becomes available. Each real frame is composited exactly once.
-
-      This avoids the 33.1 ms vs 33.333 ms jitter problem that can
-      accidentally turn a 30 fps source into an uneven ~20 fps stream.
-    */
-    videoFrameCallbackId=
-      video.requestVideoFrameCallback(
-        ()=>{
-          if(!isRecording()){
-            return;
-          }
-
-          compositeVideoFrame();
-
-          scheduleVideoFrames();
-        }
-      );
+  if(!previewFrameFallbackForced &&
+     typeof video.requestVideoFrameCallback==="function"){
+    videoFrameCallbackId=video.requestVideoFrameCallback(()=>{
+      if(!previewFrameLoopActive) return;
+      if(shouldRunPreviewFrames()) compositeVideoFrame();
+      scheduleVideoFrames();
+    });
   }else{
-    videoFallbackTimer=
-      setTimeout(
-        ()=>{
-          if(!isRecording()){
-            return;
-          }
-
-          compositeVideoFrame();
-          scheduleVideoFrames();
-        },
-        Math.round(1000/VIDEO_TARGET_FPS)
-      );
+    videoFallbackTimer=setTimeout(()=>{
+      if(!previewFrameLoopActive) return;
+      if(shouldRunPreviewFrames()) compositeVideoFrame();
+      scheduleVideoFrames();
+    },Math.round(1000/VIDEO_TARGET_FPS));
   }
 }
-
 function stopVideoFrameLoop(){
+  previewFrameLoopActive=false;
+  if(previewFrameWatchdog!==null){
+    clearInterval(previewFrameWatchdog);
+    previewFrameWatchdog=null;
+  }
   const video=$("preview");
-
-  if(
-    videoFrameCallbackId!==null &&
-    typeof video.cancelVideoFrameCallback==="function"
-  ){
-    try{
-      video.cancelVideoFrameCallback(
-        videoFrameCallbackId
-      );
-    }catch(e){}
+  if(videoFrameCallbackId!==null &&
+     typeof video.cancelVideoFrameCallback==="function"){
+    try{video.cancelVideoFrameCallback(videoFrameCallbackId);}catch(e){}
   }
-
   videoFrameCallbackId=null;
-
-  if(videoFallbackTimer!==null){
-    clearTimeout(videoFallbackTimer);
-  }
-
+  if(videoFallbackTimer!==null)clearTimeout(videoFallbackTimer);
   videoFallbackTimer=null;
 }
 
@@ -5510,28 +5586,28 @@ async function capturePhoto(){
         return;
       }
 
-      const url=
-        URL.createObjectURL(blob);
-
-      const a=
-        document.createElement("a");
-
-      a.href=
-        url;
-
-      a.download=
-        `CMMGeoCam_${currentContextForFilename()}_${filenameTimestamp()}.jpg`;
-
-      a.click();
-
-      setTimeout(
-        ()=>URL.revokeObjectURL(url),
-        3000
-      );
-
-      toast(
-        "Foto tersimpan dengan watermark."
-      );
+      const filename=`CMMGeoCam_${currentContextForFilename()}_${filenameTimestamp()}.jpg`;
+      const url=URL.createObjectURL(blob);
+      if(isIOSDevice()){
+        clearAutoDownloadLink();
+        autoDownloadObjectURL=url;
+        const link=$("autoDownloadRetry");
+        link.href=url;
+        link.download=filename;
+        link.textContent="Unduh Foto (Files)";
+        link.hidden=false;
+        const supported=updateNativeSaveButton(makeNativeSaveFile(blob,filename,"image/jpeg"),"foto");
+        showAutoDownloadBanner(supported
+          ? "Foto siap. Tekan Simpan Foto ke iPhone lalu pilih Simpan Gambar atau Simpan ke File di menu iOS. Foto belum tersimpan otomatis di galeri."
+          : "Foto siap. Pilih Unduh Foto (Files); unduhan iOS mungkin memerlukan konfirmasi.",true);
+      }else{
+        const a=document.createElement("a");
+        a.href=url;
+        a.download=filename;
+        a.click();
+        setTimeout(()=>URL.revokeObjectURL(url),3000);
+        toast("Permintaan unduh foto dikirim. Periksa galeri/Downloads.");
+      }
     },
     "image/jpeg",
     .92
@@ -5603,7 +5679,7 @@ function preferredVideoFormat(){
    5.2.C — PERSISTENT VIDEO ARCHIVE (IndexedDB)
    No automatic browser downloads are triggered by segment rotation.
 ========================================================= */
-/* 5.3.G: Never reuse an IndexedDB connection once the browser has
+/* 5.3.I: Never reuse an IndexedDB connection once the browser has
    started closing it. Reopening preserves the existing database and blobs. */
 let recordingDBConnection=null;
 function invalidateRecordingDB(db){
@@ -5780,7 +5856,7 @@ function archiveDownloadLink(blob,filename,label){
 }
 function archiveZipMeta(session,segments){
   const isContinuous=session.recordingMode==="continuous";
-  return `CMM GeoCam 5.3.G\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
+  return `CMM GeoCam 5.3.I\nSesi: ${session.id}\nMulai: ${niceArchiveDate(session.startedAt)}\nMode: ${isContinuous?"BERKELANJUTAN (potongan data satu MediaRecorder)":"LEGACY (video independen)"}\nPotongan tersimpan: ${segments.length}\nDurasi total tercatat (perkiraan): ${Math.round(segments.reduce((n,s)=>n+s.durationMs,0)/1000)} detik\nGPS gate: 25 m saat mulai capture\n\n${isContinuous?"Potongan data tidak dijamin bisa diputar satu per satu; gunakan Unduh Video Utuh agar lengkap.":"Segmen legacy merupakan video terpisah, tidak digabung otomatis."}\nPeriksa semua hasil sebelum menghapus arsip lokal.\n`;
 }
 /* ZIP STORE (no compression): compatible with MP4/WebM and saves browser
    memory by preserving Blob slices. CRC computed in bounded 1-MB pieces. */
@@ -5862,7 +5938,7 @@ async function prepareVideoZip(session,segments,button,actions){
 }
 
 /* ============================================================
-   5.3.G — ONE-FILE EXPORT (no transcode / no third-party library)
+   5.3.I — ONE-FILE EXPORT (no transcode / no third-party library)
    Every Blob MUST be a sequential dataavailable payload from the SAME
    uninterrupted MediaRecorder. This is forbidden for old 5.2.C files,
    which came from separate recorder instances and independent MP4 headers.
@@ -5994,6 +6070,16 @@ async function renderArchivePanel(){
       const actions=document.createElement("div");actions.className="archive-actions";
       if(matches.length){
         if(continuous){
+          if(isIOSDevice() && session.status==="completed"){
+            try{
+              const {blob,mime}=buildWholeRecordingBlob(session,matches);
+              const file=makeNativeSaveFile(blob,videoNameForSession(session,mime),mime);
+              if(nativeCanShareFile(file)){
+                const saveButton=createArchiveButton("Simpan ke iPhone","primary",()=>shareFileWithIOS(file));
+                actions.appendChild(saveButton);
+              }
+            }catch(error){console.warn("File arsip untuk iPhone belum siap:",error);}
+          }
           const button=createArchiveButton("Siapkan Video Utuh", "primary",()=>prepareWholeVideo(session,matches,button,actions));
           actions.appendChild(button);
         }
@@ -6062,7 +6148,60 @@ function queueSegmentPersistence(segment){
     catch(error){reportRecordingSaveError(error,segment);}
   });
 }
-/* 5.3.G: video is saved in IndexedDB BEFORE a single download attempt.
+/* =========================================================
+   5.3.I — iPhone/iPad export via native Share Sheet.
+   Safari cannot silently write into Photos or Files: a user gesture is
+   required. Keep the file ready BEFORE the tap, so navigator.share()
+   starts synchronously in the click handler (no await beforehand).
+   Sharing is not evidence that Photos/Files actually saved the video.
+========================================================= */
+function isIOSDevice(){
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent||"") ||
+    (/Macintosh/i.test(navigator.userAgent||"") && navigator.maxTouchPoints>1);
+}
+function makeNativeSaveFile(blob,filename,mime){
+  const raw=mime||blob.type||"application/octet-stream";
+  // Native share targets generally recognize a bare MIME type, not codec parameters.
+  const type=/^video\/mp4/i.test(raw)?"video/mp4":
+    /^video\/webm/i.test(raw)?"video/webm":
+    /^image\/jpeg/i.test(raw)?"image/jpeg":raw;
+  return new File([blob],filename,{type});
+}
+function nativeCanShareFile(file){
+  if(!navigator.share || !navigator.canShare || !file) return false;
+  try{return navigator.canShare({files:[file]});}catch(error){return false;}
+}
+function updateNativeSaveButton(file,kind="video"){
+  pendingNativeSaveFile=null;
+  const button=$("autoIOSSave");
+  const allowed=isIOSDevice() && nativeCanShareFile(file);
+  button.hidden=!allowed;
+  if(allowed){
+    pendingNativeSaveFile=file;
+    button.textContent=kind==="foto" ? "Simpan Foto ke iPhone" : "Simpan Video ke iPhone";
+  }
+  return allowed;
+}
+function shareFileWithIOS(file){
+  if(!nativeCanShareFile(file)){
+    toast("Menu simpan iPhone tidak didukung. Coba tombol Unduh atau Arsip.");
+    return;
+  }
+  // IMPORTANT: navigator.share() must be invoked directly during click.
+  let sharing;
+  try{sharing=navigator.share({files:[file]});}
+  catch(error){toast("Menu berbagi gagal: "+(error.message||error));return;}
+  sharing.then(()=>{
+    toast("Menu berbagi selesai. Pastikan file ada di Foto atau Files sebelum hapus arsip.");
+  }).catch(error=>{
+    if(error && error.name==="AbortError"){
+      toast("Penyimpanan dibatalkan. Untuk video, periksa Arsip GeoCam; untuk foto, tekan Simpan lagi.");
+    }else{
+      toast("Simpan iPhone gagal: "+(error.message||error)+". Coba Unduh atau Arsip.");
+    }
+  });
+}
+/* 5.3.I: video is saved in IndexedDB BEFORE a single download attempt.
    Chrome may refuse a delayed programmatic download; a visible link is kept
    for a direct tap, and we never claim that the OS has saved the file. */
 function showAutoDownloadBanner(message,retryVisible=false){
@@ -6077,6 +6216,8 @@ function clearAutoDownloadLink(){
     autoDownloadObjectURL=null;
   }
   autoDownloadSessionId=null;
+  pendingNativeSaveFile=null;
+  $("autoIOSSave").hidden=true;
   const link=$("autoDownloadRetry");
   link.removeAttribute("href");
   link.hidden=true;
@@ -6091,7 +6232,8 @@ function requestAutoDownload(){
   catch(error){console.warn("Auto download blocked:",error);return false;}
 }
 async function autoDownloadCompletedSession(sessionId){
-  showAutoDownloadBanner("Rekaman sudah diarsipkan. Menyiapkan satu file video untuk diunduh...");
+  clearAutoDownloadLink();
+  showAutoDownloadBanner("Rekaman sudah diarsipkan. Menyiapkan satu file video untuk disimpan...");
   try{
     // Read from durable IndexedDB, not the recorder's transient memory.
     const [sessions,allParts]=await Promise.all([
@@ -6109,20 +6251,31 @@ async function autoDownloadCompletedSession(sessionId){
     autoDownloadSessionId=sessionId;
     const link=$("autoDownloadRetry");
     link.href=url;
-    link.download=videoNameForSession(session,mime);
+    const filename=videoNameForSession(session,mime);
+    link.download=filename;
+    link.textContent="Unduh Video (Files)";
     link.hidden=false;
+    const iosShareAvailable=isIOSDevice()
+      ? updateNativeSaveButton(makeNativeSaveFile(blob,filename,mime))
+      : false;
     const probe=await probeWholeVideo(blob);
     const expectedSeconds=(session.endedAt-session.startedAt)/1000;
     const suspiciousDuration=probe.status==="ok" && Number.isFinite(probe.duration)
       && expectedSeconds>15 && probe.duration+Math.max(5,expectedSeconds*0.05)<expectedSeconds;
     if(probe.status!=="ok" || suspiciousDuration){
-      showAutoDownloadBanner(`Video tersimpan dalam arsip, tetapi pemeriksaan durasi/format belum meyakinkan (${probe.status}). Jangan hapus arsip; gunakan Unduh Ulang lalu periksa file atau buka Arsip untuk cadangan.`,true);
+      showAutoDownloadBanner(`Video tercatat di Arsip GeoCam, tetapi hasil pemeriksaan format/durasi belum meyakinkan (${probe.status}). Jangan hapus arsip; periksa file sebelum digunakan.`,true);
       return;
     }
-    const attempted=requestAutoDownload();
-    showAutoDownloadBanner(attempted
-      ? `Video ${prettyBytes(blob.size)} siap. Unduhan telah diminta ke Chrome; periksa Downloads. Jika tidak muncul, tekan Unduh Ulang.`
-      : `Video ${prettyBytes(blob.size)} siap di arsip. Tekan Unduh Ulang Video untuk menyimpannya ke HP.`,true);
+    if(isIOSDevice()){
+      showAutoDownloadBanner(iosShareAvailable
+        ? `Video ${prettyBytes(blob.size)} TERSIMPAN DI ARSIP GEOCAM. Tekan Simpan Video ke iPhone, lalu pilih Simpan Video atau Simpan ke File pada menu iOS. Tidak otomatis masuk galeri.`
+        : `Video ${prettyBytes(blob.size)} TERSIMPAN DI ARSIP GEOCAM. Berbagi file tidak didukung perangkat ini; coba Unduh Video (Files) atau ekspor dari Arsip.`,true);
+    }else{
+      const attempted=requestAutoDownload();
+      showAutoDownloadBanner(attempted
+        ? `Video ${prettyBytes(blob.size)} siap. Unduhan telah diminta ke browser; periksa Downloads. Jika tidak muncul, tekan Unduh Video.`
+        : `Video ${prettyBytes(blob.size)} tersimpan di Arsip GeoCam. Tekan Unduh Video untuk menyimpannya ke HP.`,true);
+    }
   }catch(error){
     console.error("Auto-export setelah STOP:",error);
     showAutoDownloadBanner("Video telah diarsipkan, tetapi unduhan otomatis belum berhasil disiapkan: "+
@@ -6155,7 +6308,9 @@ async function finishRecordingToArchive(){
     // Therefore leave a persistent link for manual retry.
     await autoDownloadCompletedSession(sessionId);
   }else{
-    toast("Rekaman tersimpan di ARSIP VIDEO. Buka Arsip untuk mengunduh.");
+    showAutoDownloadBanner(isIOSDevice()
+      ? "Rekaman tersimpan di Arsip GeoCam. Buka Arsip untuk menyimpan video ke Foto/Files iPhone."
+      : "Rekaman tersimpan di Arsip GeoCam. Buka Arsip untuk mengunduh.");
   }
   if(archiveOpen) renderArchivePanel();
   recordingFinishing=false;
@@ -6276,7 +6431,8 @@ function cleanupRecordingSession(){
 
   recordingTimer=null;
 
-  stopVideoFrameLoop();
+  // Leave the WYSIWYG preview running after STOP; only the recorder
+  // stream is stopped. The camera remains open for photo/next REC.
 
   if(
     recordingCanvasStream &&
@@ -6432,11 +6588,8 @@ async function startVideoRecording(){
   const canvas=
     $("videoCanvas");
 
-  canvas.width=
-    VIDEO_WIDTH;
-
-  canvas.height=
-    VIDEO_HEIGHT;
+  if(canvas.width!==VIDEO_WIDTH) canvas.width=VIDEO_WIDTH;
+  if(canvas.height!==VIDEO_HEIGHT) canvas.height=VIDEO_HEIGHT;
 
   overlayDirty=true;
 
@@ -6546,8 +6699,8 @@ async function startVideoRecording(){
   /*
     Frame compositor runs once for the entire recording session.
   */
+  startPreviewFrameLoop();
   compositeVideoFrame();
-  scheduleVideoFrames();
 
   startContinuousRecorder();
   syncScreenWakeLock();
@@ -6617,6 +6770,10 @@ $("startBtn").addEventListener(
   "click",
   startCamera
 );
+// If the camera stream becomes playable after the initial async setup,
+// start the shared WYSIWYG canvas loop without requiring another tap.
+$("preview").addEventListener("loadeddata",startPreviewFrameLoop);
+$("preview").addEventListener("playing",startPreviewFrameLoop);
 
 $("locatorStartGPS").addEventListener("click",startGPS);
 $("recordingArchiveBtn").addEventListener("click",openArchivePanel);
@@ -6629,9 +6786,14 @@ $("autoDownloadArchive").addEventListener("click",()=>{
 $("autoDownloadDismiss").addEventListener("click",()=>{
   $("autoDownloadBanner").hidden=true;
 });
+$("autoIOSSave").addEventListener("click",()=>{
+  if(pendingNativeSaveFile) shareFileWithIOS(pendingNativeSaveFile);
+});
 $("autoDownloadRetry").addEventListener("click",()=>{
-  // A direct user tap is more reliable than an async scripted click.
-  toast("Periksa Chrome Downloads. Jangan hapus arsip sebelum video terverifikasi.");
+  // Do not preventDefault: this is a genuine user-initiated download link.
+  toast(isIOSDevice()
+    ? "Periksa Files/Downloads. Jika video terbuka di Safari, gunakan menu Berbagi untuk menyimpannya."
+    : "Periksa Downloads. Jangan hapus arsip sebelum file terverifikasi.");
 });
 $("archiveLayer").addEventListener("click",event=>{if(event.target===$("archiveLayer")) closeArchivePanel();});
 document.querySelectorAll(".zoom-btn").forEach(button=>{
@@ -6653,7 +6815,7 @@ function twoTouchDistance(touches){
   const dy=touches[0].clientY-touches[1].clientY;
   return Math.hypot(dx,dy);
 }
-$("preview").addEventListener("touchstart",event=>{
+$("videoCanvas").addEventListener("touchstart",event=>{
   if(!isLandscapeMode() || !mediaStream || event.touches.length!==2) return;
   const distance=twoTouchDistance(event.touches);
   if(distance<12) return;
@@ -6661,7 +6823,7 @@ $("preview").addEventListener("touchstart",event=>{
   // Prevent mobile browser page magnification during camera gestures.
   if(event.cancelable) event.preventDefault();
 },{passive:false});
-$("preview").addEventListener("touchmove",event=>{
+$("videoCanvas").addEventListener("touchmove",event=>{
   if(!pinchGesture || event.touches.length!==2) return;
   if(event.cancelable) event.preventDefault();
   const next=pinchGesture.zoom * twoTouchDistance(event.touches)/pinchGesture.distance;
@@ -6670,8 +6832,8 @@ $("preview").addEventListener("touchmove",event=>{
 function stopPinch(event){
   if(event.touches.length<2) pinchGesture=null;
 }
-$("preview").addEventListener("touchend",stopPinch,{passive:true});
-$("preview").addEventListener("touchcancel",()=>{pinchGesture=null;},{passive:true});
+$("videoCanvas").addEventListener("touchend",stopPinch,{passive:true});
+$("videoCanvas").addEventListener("touchcancel",()=>{pinchGesture=null;},{passive:true});
 
 
 
@@ -6795,9 +6957,11 @@ function handleOrientationChange(){
 
   syncScreenWakeLock();
   if(isLandscapeMode()){
+    startPreviewFrameLoop();
     return;
   }
 
+  stopVideoFrameLoop();
   if(isRecording()){
     stopVideoRecording();
 
@@ -6833,6 +6997,7 @@ window.addEventListener(
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="hidden"){
+    stopVideoFrameLoop();
     if(isRecording()){
       visibilityStoppedRecording=true;
       stopVideoRecording();
@@ -6840,6 +7005,7 @@ document.addEventListener("visibilitychange",()=>{
     releaseScreenWakeLock();
   }else{
     syncScreenWakeLock();
+    startPreviewFrameLoop();
     if(visibilityStoppedRecording){
       visibilityStoppedRecording=false;
       toast("Rekaman dihentikan saat aplikasi tidak aktif. Cek Arsip Video.");
@@ -6869,7 +7035,7 @@ if(
     "load",
     ()=>{
       navigator.serviceWorker
-        .register("./service-worker.js?v=5.3.G")
+        .register("./service-worker.js?v=5.3.I")
         .catch(console.error);
     }
   );
